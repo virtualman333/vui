@@ -20,6 +20,7 @@
 	 * @description 用于选择中国城市地区 组件
 	 * @tutorial 文档地址 https://github.com/virtualman333/vui
 	 * @property {Number} level = [1：省|2：省市|3：省市区|4：省市区镇] 
+	 * @property {Array} value = [默认值] 
 	 */
 	export default {
 		name: 'vuiRegionPicker',
@@ -27,7 +28,7 @@
 		props: {
 			value: {
 				type: Array,
-				default: [0, 0, 0]
+				default: [0,0,0]
 			},
 			level: {
 				type: Number,
@@ -41,7 +42,7 @@
 					[],
 					[]
 				],
-				now_ids: [0, 0, 0],
+				now_ids: [0,0, 0],
 				now_provice_id: 0,
 				now_city_id: 0,
 				now_county_id: 0,
@@ -68,11 +69,11 @@
 					list_province.push(province[i])
 				}
 				if (this.now_provice_id == 0) {
-					this.now_provice_id = province[0].id
+					this.now_provice_id = province[this.value[0]].id
 				}
 				if (type == 0) {
-					this.now_city_id = city[this.now_provice_id][0].id
-					this.now_county_id = county[this.now_city_id][0].id
+					this.now_city_id = city[this.now_provice_id][this.value[1]].id
+					this.now_county_id = county[this.now_city_id][this.value[2]].id
 				}
 				if (type == 1) {
 
@@ -147,6 +148,7 @@
 		padding: 10px 15px;
 		box-sizing: border-box;
 		font-family: "Microsoft soft";
+		font-size: 13px;
 
 		&:focus {
 			border-color: #f07b00;
