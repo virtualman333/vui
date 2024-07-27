@@ -18,7 +18,7 @@
 	/**
 	 * 城市选择器
 	 * @description 用于选择中国城市地区 组件
-	 * @tutorial 文档地址 https://github.com/virtualman333/vui
+	 * @tutorial https://github.com/virtualman333/vui
 	 * @property {Number} level = [1：省|2：省市|3：省市区|4：省市区镇] 
 	 * @property {Array} value = [默认值] 
 	 */
