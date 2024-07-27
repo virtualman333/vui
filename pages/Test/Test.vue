@@ -13,8 +13,15 @@
 			<vui-tag text="标签" type="error"></vui-tag>
 		</view>
 		
+		
+		
 		<view>
 			<vui-region-picker :level="3" ></vui-region-picker>
+		</view>
+		
+		<view>
+			<vui-switch></vui-switch>
+			<vui-switch disabled="true"></vui-switch>
 		</view>
 	</view>
 </template>

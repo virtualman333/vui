@@ -13,6 +13,13 @@
 			{
 				"navigationBarTitleText" : "开发者测试页面"
 			}
+		},
+		{
+			"path" : "pages/Test/switchTest/switchTest",
+			"style" : 
+			{
+				"navigationBarTitleText" : "开关选择器"
+			}
 		}
 	],
 	"globalStyle": {
