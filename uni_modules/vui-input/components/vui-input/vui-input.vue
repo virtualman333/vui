@@ -1,21 +1,31 @@
 <template>
   <view class="input-container">
-    <text v-if="label" class="input-label">{{ label }}</text>
-    <input
-        :type="type"
-        :placeholder="placeholder"
-        :value="value"
-        @input="onInput"
-        :style="inputStyle"
-        class="custom-input"
-    />
+    <view class="input-wrapper">
+      <text v-if="label" class="input-label" :style="{ width: labelWidth }">{{ label }}</text>
+      <input
+          :type="type"
+          :placeholder="placeholder"
+          :value="internalValue"
+          @input="onInput"
+          @blur="triggerValidation('blur')"
+          @change="triggerValidation('change')"
+          :style="inputStyle"
+          class="custom-input"
+          :class="{ error: hasError }"
+          :width=width
+      />
+    </view>
+    <text v-if="errorMessage" class="error-message">{{ errorMessage }}</text>
   </view>
-  <text v-if="errorMessage" class="error-message">{{ errorMessage }}</text>
 </template>
 
 <script>
 export default {
-  name: 'CustomInput',
+  name: 'VuiInput',
+  model: {
+    prop: "value",
+    event: "input",
+  },
   props: {
     label: {
       type: String,
@@ -33,18 +43,101 @@ export default {
       type: String,
       default: 'text'
     },
-    errorMessage: {
-      type: String,
-      default: ''
+    rules: {
+      type: Array,
+      default: () => []
     },
     inputStyle: {
       type: String,
       default: ''
+    },
+    width: {
+      type: String,
+      default: '100%'
+    },
+    labelWidth: {
+      type: String,
+      default: ''
+    }
+  },
+  data() {
+    return {
+      internalValue: this.value,
+      errorMessage: '',
+      hasError: false // 添加错误状态标识
+    };
+  },
+  mounted() {
+    console.log(this.value, 'propsValue')
+  },
+  watch: {
+    value(newValue) {
+      this.internalValue = newValue;
+      this.validate(); // 监听父组件传递的值进行校验
     }
   },
   methods: {
     onInput(event) {
+      this.internalValue = event.detail.value;
       this.$emit('input', event.detail.value);
+      // 触发即时校验
+      this.validate();
+    },
+    triggerValidation(triggerType) {
+      this.rules.forEach(rule => {
+        if (Array.isArray(rule.trigger) ? rule.trigger.includes(triggerType) : rule.trigger === triggerType) {
+          this.validateRule(rule);
+        }
+      });
+    },
+    validateRule(rule) {
+      let message = '';
+      const value = this.internalValue;
+
+      // 校验 required
+      if (rule.required && !value) {
+        message = rule.message;
+        this.hasError = true; // 有错误
+      }
+
+      // 校验长度
+      if (rule.min !== undefined || rule.max !== undefined) {
+        if (value.length < (rule.min || 0) || value.length > (rule.max || Infinity)) {
+          message = rule.message;
+          this.hasError = true; // 有错误
+        }
+      }
+
+      // 校验正则
+      if (rule.pattern && !rule.pattern.test(value)) {
+        message = rule.message;
+        this.hasError = true; // 有错误
+      }
+
+      // 校验类型
+      if (rule.type && !this.isTypeValid(rule.type)) {
+        message = rule.message;
+        this.hasError = true; // 有错误
+      }
+      // 更新错误消息
+      this.errorMessage = message;
+    },
+    isTypeValid(type) {
+      switch (type) {
+        case 'email':
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          return emailRegex.test(this.internalValue);
+        case 'phone':
+          const phoneRegex = /^1[3456789]\d{9}$/;
+          return phoneRegex.test(this.internalValue);
+        default:
+          return true;
+      }
+    },
+    validate() {
+      this.errorMessage = ''; // 清空错误消息
+      this.hasError = false; // 在每次校验时重置错误状态
+      this.rules.forEach(rule => this.validateRule(rule));
     }
   }
 }
@@ -55,12 +148,17 @@ export default {
   width: 100%;
   margin: 0 0 4px 0;
   display: flex;
-  align-items: center;
+  flex-direction: column; /* 修改为垂直排列 */
 }
 
+.input-wrapper{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
 .input-label {
   font-size: 14px;
-  margin-bottom: 4px;
   margin-right: 6px;
 }
 
@@ -74,5 +172,11 @@ export default {
 .error-message {
   color: red;
   font-size: 12px;
+  margin-top: 4px; /* 错误消息与输入框的间距 */
+}
+
+.error {
+  border-color: red;
+  box-shadow: 0 0 4px red;
 }
 </style>
