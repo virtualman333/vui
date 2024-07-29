@@ -14,7 +14,9 @@
 		</view>
 
     <view>
-      <vui-input placeholder="请输入内容" type="password" label="标签:" errorMessage="错误"></vui-input>
+      <vui-input v-model="textValue" placeholder="请输入内容" label="标签:"   :rules="[{required: true, message: '用户昵称不能为空', trigger: 'blur'}]"
+      ></vui-input>
+      {{ textValue }}
     </view>
 		<view>
 			<vui-region-picker :level="3" ></vui-region-picker>
@@ -26,7 +28,7 @@
 	export default {
 		data() {
 			return {
-
+        textValue: '12345776'
 			}
 		},
 		methods: {

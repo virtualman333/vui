@@ -1,10 +1,10 @@
 {
-  "id": "vui-button",
-  "displayName": "vui-button",
+  "id": "vui-input",
+  "displayName": "vui-input",
   "version": "1.0.0",
-  "description": "vui-button",
+  "description": "vui-input",
   "keywords": [
-    "vui-button"
+    "vui-input"
 ],
   "repository": "",
   "engines": {
