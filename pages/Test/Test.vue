@@ -25,6 +25,17 @@
 			<vui-switch></vui-switch>
 			<vui-switch disabled="true"></vui-switch>
 		</view>
+		<view>
+			<vui-auto-scroll :list="list" width="7.06rem" height="6.75rem" scrollViewHeight="6.75rem"></vui-auto-scroll>
+			<vui-auto-scroll :list="list" width="7.06rem" height="6.75rem" scrollViewHeight="6.75rem">
+				<template #default="{ item }">
+				    <view style="background-color: aqua;width: 100%;height: 100%;text-align: center;margin: 0;">
+				        <text>自定义内容: {{ item.name}}</text>
+						welcome!
+				    </view>
+				</template>
+			</vui-auto-scroll>
+		</view>
 	</view>
 </template>
 
@@ -32,7 +43,8 @@
 export default {
 	data() {
 		return {
-			textValue: '12345776'
+			textValue: '12345776',
+			list:[1,2,3,4,5,6,7,{name:8},{name:9}]
 		}
 	},
 	methods: {}
