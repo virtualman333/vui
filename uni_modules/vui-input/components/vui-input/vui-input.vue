@@ -5,15 +5,14 @@
 			<input
 				:type="type"
 				:placeholder="placeholder"
-				v-model = "value"
-				:value="value"
+				:value="modelValue"
+				:disabled="disabled"
+				:style="computedInputStyle"
 				@input="onInput"
 				@blur="triggerValidation('blur')"
 				@change="triggerValidation('change')"
-				:style="inputStyle"
 				class="custom-input"
 				:class="{ error: hasError }"
-				:width="width"
 			/>
 		</view>
 		<text v-if="errorMessage" class="error-message">{{ errorMessage }}</text>
@@ -21,14 +20,36 @@
 </template>
 
 <script>
+/**
+ * Input 输入框
+ * @description 带校验能力的输入框，支持 Vue3 v-model 双向绑定
+ * @property {String|Number} modelValue 绑定值，支持 v-model
+ * @property {String} label 左侧标签文本
+ * @property {String} labelWidth 标签宽度
+ * @property {String} placeholder 占位文案
+ * @property {String} type 输入类型 text / number / idcard / digit
+ * @property {Boolean} disabled 是否禁用
+ * @property {Array} rules 校验规则 [{ required, message, min, max, pattern, type, trigger }]
+ * @property {String} inputStyle 输入框自定义内联样式
+ * @property {String} width 输入框宽度
+ * @event {Function} update:modelValue 值变化时触发（v-model）
+ * @event {Function} input 值变化时触发（兼容写法）
+ * @event {Function} blur 失焦时触发
+ * @event {Function} change 内容确认变化时触发
+ */
 export default {
 	name: 'VuiInput',
-	model: {
-		prop: 'value',
-		event: 'input'
-	},
+	emits: ['update:modelValue', 'input', 'blur', 'change'],
 	props: {
+		modelValue: {
+			type: [String, Number],
+			default: ''
+		},
 		label: {
+			type: String,
+			default: ''
+		},
+		labelWidth: {
 			type: String,
 			default: ''
 		},
@@ -36,13 +57,13 @@ export default {
 			type: String,
 			default: '请输入...'
 		},
-		// defautValue: {
-		// 	type: String,
-		// 	default: ''
-		// },
 		type: {
 			type: String,
 			default: 'text'
+		},
+		disabled: {
+			type: Boolean,
+			default: false
 		},
 		rules: {
 			type: Array,
@@ -55,95 +76,95 @@ export default {
 		width: {
 			type: String,
 			default: '100%'
-		},
-		labelWidth: {
-			type: String,
-			default: ''
 		}
 	},
 	data() {
 		return {
-			internalValue: '',
 			errorMessage: '',
-			hasError: false // 添加错误状态标识
+			hasError: false
 		};
 	},
-	mounted() {
-		this.internalValue = this.value;
-		console.log(this.value, 'propsValue');
+	computed: {
+		computedInputStyle() {
+			const parts = [];
+			if (this.width) parts.push('width:' + this.width);
+			if (this.inputStyle) parts.push(this.inputStyle.replace(/;\s*$/, ''));
+			return parts.join(';');
+		}
 	},
 	watch: {
-		value: {
-			immediate: true, // 立即执行 :当刷新页面时会立即执行一次handler函数
-			handler(val) {
-				this.internalValue = val;
-				this.validate(); // 监听父组件传递的值进行校验
+		modelValue: {
+			immediate: true,
+			handler() {
+				// 父组件值变化时按 rules 重跑校验
+				this.validateWith(this.modelValue);
 			}
 		}
 	},
 	methods: {
 		onInput(event) {
-			this.internalValue = event.detail.value;
-			this.$emit('input', this.internalValue);
-			console.log(this.internalValue)
-			// 触发即时校验
-			this.validate();
+			const val = event.detail.value;
+			this.$emit('update:modelValue', val);
+			this.$emit('input', val);
+			this.validateWith(val);
 		},
 		triggerValidation(triggerType) {
 			this.rules.forEach((rule) => {
-				if (Array.isArray(rule.trigger) ? rule.trigger.includes(triggerType) : rule.trigger === triggerType) {
-					this.validateRule(rule);
+				const triggers = Array.isArray(rule.trigger) ? rule.trigger : [rule.trigger];
+				if (triggers.includes(triggerType)) {
+					this.validateRuleWith(rule, this.modelValue);
 				}
 			});
 		},
-		validateRule(rule) {
+		validateRuleWith(rule, value) {
 			let message = '';
-			const value = this.internalValue;
+			const text = value === undefined || value === null ? '' : String(value);
 
-			// 校验 required
-			if (rule.required && !value) {
+			if (rule.required && !text) {
 				message = rule.message;
-				this.hasError = true; // 有错误
+				this.hasError = true;
 			}
 
-			// 校验长度
 			if (rule.min !== undefined || rule.max !== undefined) {
-				if (value.length < (rule.min || 0) || value.length > (rule.max || Infinity)) {
+				if (text.length < (rule.min || 0) || text.length > (rule.max || Infinity)) {
 					message = rule.message;
-					this.hasError = true; // 有错误
+					this.hasError = true;
 				}
 			}
 
-			// 校验正则
-			if (rule.pattern && !rule.pattern.test(value)) {
+			if (rule.pattern && !rule.pattern.test(text)) {
 				message = rule.message;
-				this.hasError = true; // 有错误
+				this.hasError = true;
 			}
 
-			// 校验类型
-			if (rule.type && !this.isTypeValid(rule.type)) {
+			if (rule.type && !this.isTypeValid(rule.type, text)) {
 				message = rule.message;
-				this.hasError = true; // 有错误
+				this.hasError = true;
 			}
-			// 更新错误消息
-			this.errorMessage = message;
+
+			if (message) {
+				this.errorMessage = message;
+			}
 		},
-		isTypeValid(type) {
+		isTypeValid(type, value) {
 			switch (type) {
 				case 'email':
-					const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-					return emailRegex.test(this.internalValue);
+					return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 				case 'phone':
-					const phoneRegex = /^1[3456789]\d{9}$/;
-					return phoneRegex.test(this.internalValue);
+					return /^1[3456789]\d{9}$/.test(value);
 				default:
 					return true;
 			}
 		},
+		validateWith(value) {
+			this.errorMessage = '';
+			this.hasError = false;
+			this.rules.forEach((rule) => this.validateRuleWith(rule, value));
+			return !this.hasError;
+		},
+		/** 供父组件通过 ref 主动触发校验，返回校验是否通过 */
 		validate() {
-			this.errorMessage = ''; // 清空错误消息
-			this.hasError = false; // 在每次校验时重置错误状态
-			this.rules.forEach((rule) => this.validateRule(rule));
+			return this.validateWith(this.modelValue);
 		}
 	}
 };
@@ -183,7 +204,7 @@ $vui-white: #fff !default;
 	width: 100%;
 	margin: 0 0 4px 0;
 	display: flex;
-	flex-direction: column; /* 修改为垂直排列 */
+	flex-direction: column;
 }
 
 .input-wrapper {
@@ -192,6 +213,7 @@ $vui-white: #fff !default;
 	gap: 6px;
 	margin: 0;
 }
+
 .input-label {
 	font-size: 14px;
 	margin-right: 6px;
@@ -202,16 +224,17 @@ $vui-white: #fff !default;
 	border: 1px solid $vui-gray-color;
 	border-radius: 4px;
 	flex: 1;
+	box-sizing: border-box;
 }
 
 .error-message {
 	color: $vui-error;
 	font-size: 12px;
-	margin-top: 4px; /* 错误消息与输入框的间距 */
+	margin-top: 4px;
 }
 
 .error {
-	border-color: red;
-	box-shadow: 0 0 4px red;
+	border-color: $vui-error;
+	box-shadow: 0 0 4px $vui-error;
 }
 </style>

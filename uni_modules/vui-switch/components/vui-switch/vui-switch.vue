@@ -1,31 +1,49 @@
 <template>
-	<switch :disabled="disabled" ></switch>
+	<switch
+		:checked="modelValue"
+		:disabled="disabled"
+		:color="color"
+		@change="onChange"
+	></switch>
 </template>
+
 <script>
-	export default {
-		name: 'VuiSwitch',
-		props: {
-			
-			type: {
-				type: String,
-				default: 'default'
-			},
-			size: String,
-			disabled:{
-				type:Boolean,
-				default:false,
-			}
+/**
+ * Switch 开关
+ * @description 表示两种互斥状态之间的切换，支持 Vue3 v-model 双向绑定
+ * @property {Boolean} modelValue 是否打开，支持 v-model
+ * @property {Boolean} disabled 是否禁用
+ * @property {String} color 打开时的背景色，留空则跟随平台主题
+ * @event {Function} update:modelValue 状态变化时触发（v-model）
+ * @event {Function} change 状态变化时触发
+ */
+export default {
+	name: 'VuiSwitch',
+	emits: ['update:modelValue', 'change'],
+	props: {
+		modelValue: {
+			type: Boolean,
+			default: false
 		},
-	
-		computed: {},
-	
-		methods: {
-			handleClick(evt) {
-				this.$emit('click', evt);
-			}
+		disabled: {
+			type: Boolean,
+			default: false
+		},
+		color: {
+			type: String,
+			default: ''
 		}
-	};
+	},
+	methods: {
+		onChange(event) {
+			const checked = event.detail.value;
+			this.$emit('update:modelValue', checked);
+			this.$emit('change', checked);
+		}
+	}
+};
 </script>
+
 <style lang="scss">
 /* ===== VUI 主题变量（兜底定义，可在项目 uni.scss 中覆盖） ===== */
 /* 功能色 */

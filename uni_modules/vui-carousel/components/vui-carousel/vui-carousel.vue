@@ -86,6 +86,14 @@ export default {
 		showTitle: {
 			type: Boolean,
 			default: false
+		},
+		indicatorColor: {
+			type: String,
+			default: 'rgba(255,255,255,0.6)'
+		},
+		indicatorActiveColor: {
+			type: String,
+			default: VUI_COLOR.white
 		}
 	},
 	data() {

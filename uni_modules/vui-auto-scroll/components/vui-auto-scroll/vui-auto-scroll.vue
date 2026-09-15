@@ -20,7 +20,16 @@
 </template>
 
 <script>
+/**
+ * AutoScroll 自动滚动
+ * @description 横向自动循环滚动的列表，常用于公告栏、榜单跑马灯
+ * @property {Array} list 数据列表，通过默认插槽自定义每一项内容
+ * @property {String} width 容器宽度（CSS 值）
+ * @property {String} height 容器高度（CSS 值）
+ * @property {String} scrollViewHeight 内层 scroll-view 高度（CSS 值）
+ */
 export default {
+  name: 'VuiAutoScroll',
   props: {
     list: {
       type: Array,

@@ -1,34 +1,27 @@
 <template>
 	<view class="v-header">
-		
-		<view style="text-align: center;">{{title}}</view>
+		<view class="v-header__title">{{ title }}</view>
 	</view>
 </template>
-<script>
-const app = getApp();
-export default {
-	props:{
-		title:{
-			default:'标题',
-			type:String
-		}
-	},
-	data(){
-		return{
 
+<script>
+/**
+ * Header 头部标题
+ * @description 简易页面头部标题栏
+ * @property {String} title 标题文本
+ */
+export default {
+	name: 'VuiHeader',
+	props: {
+		title: {
+			type: String,
+			default: '标题'
 		}
-	},
-	methods:{
-		
-	},
-	created() {
-		
-		
-		
 	}
-}
+};
 </script>
-<style lang="scss">
+
+<style lang="scss" scoped>
 /* ===== VUI 主题变量（兜底定义，可在项目 uni.scss 中覆盖） ===== */
 /* 功能色 */
 $vui-primary: #2979ff !default;
@@ -58,11 +51,15 @@ $vui-active-bg-color: #f5f9ff !default;
 $vui-gray-color: #ccc !default;
 $vui-white: #fff !default;
 /* ===== VUI 主题变量结束 ===== */
-	.v-header{
-		background-color: $vui-fill-color;
-		height: 30px;
-		width: 750rpx;
-		
-	}
-	
+.v-header {
+	background-color: $vui-fill-color;
+	height: 30px;
+	width: 750rpx;
+}
+
+.v-header__title {
+	text-align: center;
+	color: $vui-text-color;
+	line-height: 30px;
+}
 </style>

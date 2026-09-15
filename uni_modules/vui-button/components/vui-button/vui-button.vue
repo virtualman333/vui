@@ -1,23 +1,26 @@
 <template>
 	<!-- 通过传递不同的class，从而展示不同的样式 -->
-	<button @click="handleClick" :class="'el-button--' + type">
+	<button @click="handleClick" :class="'vui-button--' + type">
 		<slot></slot>
 	</button>
 </template>
 
 <script>
+/**
+ * Button 按钮
+ * @description 常用操作按钮，通过 type 切换配色
+ * @property {String} type 按钮类型 default / primary / success / warning / error
+ * @event {Function} click 点击按钮时触发
+ */
 export default {
 	name: 'VuiButton',
+	emits: ['click'],
 	props: {
 		type: {
 			type: String,
 			default: 'default'
-		},
-		size: String
+		}
 	},
-
-	computed: {},
-
 	methods: {
 		handleClick(evt) {
 			this.$emit('click', evt);
@@ -58,21 +61,21 @@ $vui-white: #fff !default;
 /* ===== VUI 主题变量结束 ===== */
 .vui-button {
 }
-.el-button--default {
+.vui-button--default {
 }
-.el-button--primary {
+.vui-button--primary {
 	background-color: $vui-primary;
 	color: $vui-text-color-inverse;
 }
-.el-button--success {
+.vui-button--success {
 	background-color: $vui-success;
 	color: $vui-text-color-inverse;
 }
-.el-button--warning {
+.vui-button--warning {
 	background-color: $vui-warning;
 	color: $vui-text-color-inverse;
 }
-.el-button--error {
+.vui-button--error {
 	background-color: $vui-error;
 }
 </style>
