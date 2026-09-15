@@ -4,6 +4,10 @@
 			VUI，一款UI组件
 		</view>
 		<vui-header></vui-header>
+		<view class="entry">
+			<button class="entry-btn" type="default" @click="go('/pages/demo/demo')">组件总览</button>
+			<button class="entry-btn" type="default" @click="go('/pages/Test/Test')">开发者测试页面</button>
+		</view>
 	</view>
 </template>
 
@@ -14,13 +18,12 @@
 				title: 'Hello'
 			}
 		},
-		onLoad() {
-			uni.navigateTo({
-				url:'/pages/Test/Test'
-			})
-		},
 		methods: {
-
+			go(url) {
+				uni.navigateTo({
+					url: url
+				})
+			}
 		}
 	}
 </script>
@@ -29,26 +32,15 @@
 	.content {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		justify-content: center;
 	}
 
-	.logo {
-		height: 200rpx;
-		width: 200rpx;
-		margin-top: 200rpx;
-		margin-left: auto;
-		margin-right: auto;
-		margin-bottom: 50rpx;
-	}
-
-	.text-area {
+	.entry {
 		display: flex;
-		justify-content: center;
+		flex-direction: column;
+		padding: 40rpx;
 	}
 
-	.title {
-		font-size: 36rpx;
-		color: #8f8f94;
+	.entry-btn {
+		margin-bottom: 24rpx;
 	}
 </style>

@@ -15,6 +15,13 @@
 			}
 		},
 		{
+			"path" : "pages/demo/demo",
+			"style" :
+			{
+				"navigationBarTitleText" : "组件总览"
+			}
+		},
+		{
 			"path" : "pages/Test/switchTest/switchTest",
 			"style" : 
 			{
