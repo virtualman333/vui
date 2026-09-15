@@ -154,6 +154,20 @@ print('组件数:', len(COMPS))
 missing = [c['id'] for c in COMPS if not c['props']]
 print('未解析到 props 的组件:', missing)
 
+# ---------- 同步 package.json 描述中的组件数量 ----------
+# 描述里的数字写死会随迭代过期（npm 页面直接展示它），这里统一由脚本维护。
+PKG_PATH = 'package.json'
+if os.path.exists(PKG_PATH):
+    pkg = json.load(open(PKG_PATH, encoding='utf-8'))
+    desc_new = ('Virtual UI (VUI) —— 基于 uni-app 的 Vue3 跨端组件库，%d 个开箱即用的高质量组件，'
+                '覆盖基础 / 表单 / 数据展示 / 反馈 / 媒体 / AI 场景，支持 iOS / Android / H5 / 各家小程序'
+                % len(COMPS))
+    if pkg.get('description') != desc_new:
+        pkg['description'] = desc_new
+        open(PKG_PATH, 'w', encoding='utf-8', newline='\n').write(
+            json.dumps(pkg, ensure_ascii=False, indent=2) + '\n')
+        print('package.json 描述已同步组件数量:', len(COMPS))
+
 # ---------- 生成 index.js ----------
 lines = [
     '/**',

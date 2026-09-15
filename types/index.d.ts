@@ -120,9 +120,9 @@ export interface VuiCarouselProps {
 	mode?: string;
 	/** 是否显示图片标题 */
 	showTitle?: boolean;
-	/** */
+	/** 指示器颜色 */
 	indicatorColor?: string;
-	/** */
+	/** 当前选中指示器的颜色 */
 	indicatorActiveColor?: string;
 }
 
@@ -135,6 +135,90 @@ export interface VuiCarouselEmits {
 }
 
 export const VuiCarousel: DefineComponent<VuiCarouselProps>;
+
+/** AI 对话消息气泡 */
+export interface VuiChatBubbleProps {
+	/** 消息文本内容 */
+	content?: string;
+	/** 气泡位置 left / right，默认 left */
+	placement?: string;
+	/** 头像图片地址 */
+	avatar?: string;
+	/** 名称 */
+	name?: string;
+	/** 是否显示头像 */
+	showAvatar?: boolean;
+	/** 消息状态 '' / loading / error */
+	status?: string;
+	/** 时间文本 */
+	time?: string;
+	/** 气泡最大宽度 */
+	maxWidth?: string;
+	/** 气泡背景色 */
+	color?: string;
+	/** 文字颜色 */
+	textColor?: string;
+	/** 文字是否可选中 */
+	selectable?: boolean;
+}
+
+/** AI 对话消息气泡 事件 */
+export interface VuiChatBubbleEmits {
+	/** 点击气泡时触发 */
+	click: (...args: any[]) => void;
+	/** 长按气泡时触发 */
+	longpress: (...args: any[]) => void;
+}
+
+export const VuiChatBubble: DefineComponent<VuiChatBubbleProps>;
+
+/** AI 对话输入框 */
+export interface VuiChatInputProps {
+	/** 输入内容，支持 v-model */
+	modelValue?: string;
+	/** 占位文案 */
+	placeholder?: string;
+	/** 是否禁用 */
+	disabled?: boolean;
+	/** 是否处于生成中（显示停止按钮） */
+	loading?: boolean;
+	/** 是否随内容自适应高度 */
+	autoHeight?: boolean;
+	/** 最大输入长度 */
+	maxlength?: number;
+	/** 是否显示字数 */
+	showCount?: boolean;
+	/** 发送按钮文案 */
+	sendText?: string;
+	/** 停止按钮文案 */
+	stopText?: string;
+	/** 是否显示语音入口 */
+	showVoice?: boolean;
+	/** 键盘右下角按钮类型 */
+	confirmType?: string;
+}
+
+/** AI 对话输入框 事件 */
+export interface VuiChatInputEmits {
+	/** :modelValue 输入内容变化 */
+	update: (...args: any[]) => void;
+	/** 点击发送时触发，参数为当前文本 */
+	send: (...args: any[]) => void;
+	/** 生成中点击停止时触发 */
+	stop: (...args: any[]) => void;
+	/** 点击语音入口时触发 */
+	voice: (...args: any[]) => void;
+	/** 输入框聚焦 */
+	focus: (...args: any[]) => void;
+	/** 输入框失焦 */
+	blur: (...args: any[]) => void;
+	/** 内容被清空 */
+	clear: (...args: any[]) => void;
+}
+
+export type VuiChatInputModelValue = VuiChatInputProps['modelValue'];
+
+export const VuiChatInput: DefineComponent<VuiChatInputProps>;
 
 /** Checkbox 复选框 */
 export interface VuiCheckboxProps {
@@ -162,6 +246,32 @@ export type VuiCheckboxModelValue = VuiCheckboxProps['modelValue'];
 
 export const VuiCheckbox: DefineComponent<VuiCheckboxProps>;
 
+/** 代码块 */
+export interface VuiCodeProps {
+	/** 代码内容 */
+	code?: string;
+	/** 语言标识（仅用于展示标签） */
+	language?: string;
+	/** 标题，不传则显示 language */
+	title?: string;
+	/** 是否显示行号 */
+	showLineNumbers?: boolean;
+	/** 是否显示复制按钮 */
+	showCopy?: boolean;
+	/** 是否自动换行 */
+	wrap?: boolean;
+	/** 最大高度，超出滚动 */
+	maxHeight?: string;
+}
+
+/** 代码块 事件 */
+export interface VuiCodeEmits {
+	/** 点击复制按钮，参数为已复制的内容 */
+	copy: (...args: any[]) => void;
+}
+
+export const VuiCode: DefineComponent<VuiCodeProps>;
+
 /** Collapse 折叠面板 */
 export interface VuiCollapseProps {
 	/** 面板数据 [{title, content}] */
@@ -183,6 +293,30 @@ export interface VuiCollapseEmits {
 export type VuiCollapseModelValue = VuiCollapseProps['modelValue'];
 
 export const VuiCollapse: DefineComponent<VuiCollapseProps>;
+
+/** 一键复制 */
+export interface VuiCopyProps {
+	/** 需要复制的内容 */
+	content?: string;
+	/** 按钮显示文案 */
+	text?: string;
+	/** 是否显示图标 */
+	showIcon?: boolean;
+	/** 复制成功提示文案 */
+	successText?: string;
+	/** 提示停留时间 */
+	duration?: number;
+}
+
+/** 一键复制 事件 */
+export interface VuiCopyEmits {
+	/** 复制成功，参数为已复制的内容 */
+	success: (...args: any[]) => void;
+	/** 复制失败，参数为错误对象 */
+	error: (...args: any[]) => void;
+}
+
+export const VuiCopy: DefineComponent<VuiCopyProps>;
 
 /** DatePicker 日期选择器 */
 export interface VuiDatePickerProps {
@@ -237,6 +371,36 @@ export interface VuiDrawerEmits {
 export type VuiDrawerModelValue = VuiDrawerProps['modelValue'];
 
 export const VuiDrawer: DefineComponent<VuiDrawerProps>;
+
+/** AI 回答评价 */
+export interface VuiFeedbackProps {
+	/** 当前评价 '' / like / dislike，支持 v-model */
+	modelValue?: string;
+	/** 赞同文案 */
+	likeText?: string;
+	/** 不赞同文案 */
+	dislikeText?: string;
+	/** 是否显示文案 */
+	showText?: boolean;
+	/** 是否禁用 */
+	disabled?: boolean;
+}
+
+/** AI 回答评价 事件 */
+export interface VuiFeedbackEmits {
+	/** :modelValue 评价变化 */
+	update: (...args: any[]) => void;
+	/** 评价变化时触发，参数为当前值 */
+	change: (...args: any[]) => void;
+	/** 选中赞同 */
+	like: (...args: any[]) => void;
+	/** 选中不赞同 */
+	dislike: (...args: any[]) => void;
+}
+
+export type VuiFeedbackModelValue = VuiFeedbackProps['modelValue'];
+
+export const VuiFeedback: DefineComponent<VuiFeedbackProps>;
 
 /** FormItem 表单项 */
 export interface VuiFormItemProps {
@@ -390,6 +554,26 @@ export type VuiLoadingModelValue = VuiLoadingProps['modelValue'];
 
 export const VuiLoading: DefineComponent<VuiLoadingProps>;
 
+/** 轻量 Markdown 渲染 */
+export interface VuiMarkdownProps {
+	/** Markdown 源文本 */
+	content?: string;
+	/** 文字是否可选中 */
+	selectable?: boolean;
+	/** 代码块是否显示复制按钮 */
+	showCopy?: boolean;
+	/** 代码块最大高度 */
+	codeMaxHeight?: string;
+}
+
+/** 轻量 Markdown 渲染 事件 */
+export interface VuiMarkdownEmits {
+	/** 代码块复制成功，参数为已复制内容 */
+	copy: (...args: any[]) => void;
+}
+
+export const VuiMarkdown: DefineComponent<VuiMarkdownProps>;
+
 /** Message 消息提示 */
 export interface VuiMessageProps {
 	/** 是否显示，支持 v-model */
@@ -449,6 +633,36 @@ export interface VuiModalEmits {
 export type VuiModalModelValue = VuiModalProps['modelValue'];
 
 export const VuiModal: DefineComponent<VuiModalProps>;
+
+/** 模型选择 */
+export interface VuiModelSelectProps {
+	/** 选中值，支持 v-model */
+	modelValue?: string;
+	/** 模型列表 [{ label, value, desc, tag, icon, disabled }] */
+	options?: any[];
+	/** 弹层标题 */
+	title?: string;
+	/** 占位文案 */
+	placeholder?: string;
+	/** 是否禁用 */
+	disabled?: boolean;
+	/** 是否可清空 */
+	clearable?: boolean;
+	/** 是否在触发器上显示当前模型的描述 */
+	showDesc?: boolean;
+}
+
+/** 模型选择 事件 */
+export interface VuiModelSelectEmits {
+	/** :modelValue 选中值变化 */
+	update: (...args: any[]) => void;
+	/** 选中值变化时触发，参数为选中项对象 */
+	change: (...args: any[]) => void;
+}
+
+export type VuiModelSelectModelValue = VuiModelSelectProps['modelValue'];
+
+export const VuiModelSelect: DefineComponent<VuiModelSelectProps>;
 
 /** Notification 通知 */
 export interface VuiNotificationProps {
@@ -553,6 +767,40 @@ export interface VuiProgressProps {
 }
 
 export const VuiProgress: DefineComponent<VuiProgressProps>;
+
+/** 提示词卡片 */
+export interface VuiPromptCardProps {
+	/** 是否选中，支持 v-model */
+	modelValue?: boolean;
+	/** 标题 */
+	title?: string;
+	/** 提示词内容 */
+	content?: string;
+	/** 标签数组 */
+	tags?: any[];
+	/** 图标字符或图片地址 */
+	icon?: string;
+	/** 是否禁用 */
+	disabled?: boolean;
+	/** 是否可选中 */
+	selectable?: boolean;
+	/** 内容最大行数 */
+	maxLines?: number;
+}
+
+/** 提示词卡片 事件 */
+export interface VuiPromptCardEmits {
+	/** 点击卡片时触发 */
+	click: (...args: any[]) => void;
+	/** :modelValue 选中状态变化 */
+	update: (...args: any[]) => void;
+	/** 选中状态变化时触发，参数为当前是否选中 */
+	change: (...args: any[]) => void;
+}
+
+export type VuiPromptCardModelValue = VuiPromptCardProps['modelValue'];
+
+export const VuiPromptCard: DefineComponent<VuiPromptCardProps>;
 
 /** Radio 单选框 */
 export interface VuiRadioProps {
@@ -786,6 +1034,36 @@ export interface VuiTagEmits {
 
 export const VuiTag: DefineComponent<VuiTagProps>;
 
+/** AI 推理过程展示 */
+export interface VuiThinkingProps {
+	/** 是否展开，支持 v-model */
+	modelValue?: boolean;
+	/** 标题文案 */
+	title?: string;
+	/** 推理正文 */
+	content?: string;
+	/** 是否仍在推理中 */
+	loading?: boolean;
+	/** 耗时秒数 */
+	duration?: number;
+	/** 展开后最大高度 */
+	maxHeight?: string;
+	/** 初始是否展开 */
+	defaultExpand?: boolean;
+}
+
+/** AI 推理过程展示 事件 */
+export interface VuiThinkingEmits {
+	/** :modelValue 展开状态变化 */
+	update: (...args: any[]) => void;
+	/** 展开状态变化时触发，参数为当前是否展开 */
+	toggle: (...args: any[]) => void;
+}
+
+export type VuiThinkingModelValue = VuiThinkingProps['modelValue'];
+
+export const VuiThinking: DefineComponent<VuiThinkingProps>;
+
 /** TimePicker 时间选择器 */
 export interface VuiTimePickerProps {
 	/** 选中时间 HH:mm 或 HH:mm:ss，支持 v-model */
@@ -834,6 +1112,34 @@ export type VuiTooltipModelValue = VuiTooltipProps['modelValue'];
 
 export const VuiTooltip: DefineComponent<VuiTooltipProps>;
 
+/** 打字机流式文本 */
+export interface VuiTypingProps {
+	/** 完整文本内容 */
+	text?: string;
+	/** 每个字符的间隔毫秒数 */
+	speed?: number;
+	/** 挂载后是否自动开始 */
+	autoplay?: boolean;
+	/** 是否仍处于流式输出中 */
+	typing?: boolean;
+	/** 是否显示光标 */
+	showCursor?: boolean;
+	/** 光标字符 */
+	cursorChar?: string;
+	/** 文字是否可选中 */
+	selectable?: boolean;
+}
+
+/** 打字机流式文本 事件 */
+export interface VuiTypingEmits {
+	/** 每输出一个字符时触发，参数为当前已输出文本 */
+	change: (...args: any[]) => void;
+	/** 全部文本输出完成时触发，参数为完整文本 */
+	finish: (...args: any[]) => void;
+}
+
+export const VuiTyping: DefineComponent<VuiTypingProps>;
+
 /** Upload 上传 */
 export interface VuiUploadProps {
 	/** 文件列表 [{url, path, progress}]，支持 v-model */
@@ -870,6 +1176,42 @@ export type VuiUploadModelValue = VuiUploadProps['modelValue'];
 
 export const VuiUpload: DefineComponent<VuiUploadProps>;
 
+/** 语音输入 */
+export interface VuiVoiceInputProps {
+	/** 是否正在录音，支持 v-model */
+	modelValue?: boolean;
+	/** 是否禁用 */
+	disabled?: boolean;
+	/** 最长录音秒数 */
+	maxDuration?: number;
+	/** 按住时的提示文案 */
+	tipText?: string;
+	/** 松手发送提示 */
+	releaseText?: string;
+	/** 录音格式 mp3 / aac / wav */
+	format?: string;
+}
+
+/** 语音输入 事件 */
+export interface VuiVoiceInputEmits {
+	/** :modelValue 录音状态变化 */
+	update: (...args: any[]) => void;
+	/** 开始录音 */
+	start: (...args: any[]) => void;
+	/** 结束录音（非取消） */
+	stop: (...args: any[]) => void;
+	/** 上滑取消录音 */
+	cancel: (...args: any[]) => void;
+	/** 录音结束并拿到文件，参数为 { tempFilePath, duration, fileSize } */
+	finish: (...args: any[]) => void;
+	/** 录音失败或当前环境不支持录音 */
+	error: (...args: any[]) => void;
+}
+
+export type VuiVoiceInputModelValue = VuiVoiceInputProps['modelValue'];
+
+export const VuiVoiceInput: DefineComponent<VuiVoiceInputProps>;
+
 export declare const components: Record<string, DefineComponent<any>>;
 export declare function kebab(str: string): string;
 declare const VUI: Plugin;
@@ -889,14 +1231,24 @@ declare module 'vue' {
 		'vui-card': typeof VuiCard;
 		VuiCarousel: typeof VuiCarousel;
 		'vui-carousel': typeof VuiCarousel;
+		VuiChatBubble: typeof VuiChatBubble;
+		'vui-chat-bubble': typeof VuiChatBubble;
+		VuiChatInput: typeof VuiChatInput;
+		'vui-chat-input': typeof VuiChatInput;
 		VuiCheckbox: typeof VuiCheckbox;
 		'vui-checkbox': typeof VuiCheckbox;
+		VuiCode: typeof VuiCode;
+		'vui-code': typeof VuiCode;
 		VuiCollapse: typeof VuiCollapse;
 		'vui-collapse': typeof VuiCollapse;
+		VuiCopy: typeof VuiCopy;
+		'vui-copy': typeof VuiCopy;
 		VuiDatePicker: typeof VuiDatePicker;
 		'vui-date-picker': typeof VuiDatePicker;
 		VuiDrawer: typeof VuiDrawer;
 		'vui-drawer': typeof VuiDrawer;
+		VuiFeedback: typeof VuiFeedback;
+		'vui-feedback': typeof VuiFeedback;
 		VuiFormItem: typeof VuiFormItem;
 		'vui-form-item': typeof VuiFormItem;
 		VuiForm: typeof VuiForm;
@@ -911,10 +1263,14 @@ declare module 'vue' {
 		'vui-input': typeof VuiInput;
 		VuiLoading: typeof VuiLoading;
 		'vui-loading': typeof VuiLoading;
+		VuiMarkdown: typeof VuiMarkdown;
+		'vui-markdown': typeof VuiMarkdown;
 		VuiMessage: typeof VuiMessage;
 		'vui-message': typeof VuiMessage;
 		VuiModal: typeof VuiModal;
 		'vui-modal': typeof VuiModal;
+		VuiModelSelect: typeof VuiModelSelect;
+		'vui-model-select': typeof VuiModelSelect;
 		VuiNotification: typeof VuiNotification;
 		'vui-notification': typeof VuiNotification;
 		VuiPagination: typeof VuiPagination;
@@ -923,6 +1279,8 @@ declare module 'vue' {
 		'vui-popover': typeof VuiPopover;
 		VuiProgress: typeof VuiProgress;
 		'vui-progress': typeof VuiProgress;
+		VuiPromptCard: typeof VuiPromptCard;
+		'vui-prompt-card': typeof VuiPromptCard;
 		VuiRadio: typeof VuiRadio;
 		'vui-radio': typeof VuiRadio;
 		VuiRegionPicker: typeof VuiRegionPicker;
@@ -943,11 +1301,17 @@ declare module 'vue' {
 		'vui-tabs': typeof VuiTabs;
 		VuiTag: typeof VuiTag;
 		'vui-tag': typeof VuiTag;
+		VuiThinking: typeof VuiThinking;
+		'vui-thinking': typeof VuiThinking;
 		VuiTimePicker: typeof VuiTimePicker;
 		'vui-time-picker': typeof VuiTimePicker;
 		VuiTooltip: typeof VuiTooltip;
 		'vui-tooltip': typeof VuiTooltip;
+		VuiTyping: typeof VuiTyping;
+		'vui-typing': typeof VuiTyping;
 		VuiUpload: typeof VuiUpload;
 		'vui-upload': typeof VuiUpload;
+		VuiVoiceInput: typeof VuiVoiceInput;
+		'vui-voice-input': typeof VuiVoiceInput;
 	}
 }

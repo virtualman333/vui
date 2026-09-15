@@ -45,6 +45,18 @@
   - [Backtop 回到顶部](#vui-backtop)
 - **媒体组件**
   - [Carousel 轮播图](#vui-carousel)
+- **AI 组件**
+  - [Chat Bubble 对话消息气泡](#vui-chat-bubble)
+  - [Chat Input 对话输入框](#vui-chat-input)
+  - [Typing 打字机流式文本](#vui-typing)
+  - [Thinking 推理过程展示](#vui-thinking)
+  - [Feedback 回答评价](#vui-feedback)
+  - [Copy 一键复制](#vui-copy)
+  - [Code 代码块](#vui-code)
+  - [Prompt Card 提示词卡片](#vui-prompt-card)
+  - [Markdown 轻量 Markdown 渲染](#vui-markdown)
+  - [Model Select 模型选择](#vui-model-select)
+  - [Voice Input 语音输入](#vui-voice-input)
 
 ---
 
@@ -696,8 +708,8 @@
 | indicatorType | `string` | `'dot'` | 指示器类型 dot / number |
 | mode | `string` | `'aspectFill'` | 图片裁剪模式 |
 | showTitle | `boolean` | `false` | 是否显示图片标题 |
-| indicatorColor | `string` | `'rgba(255,255,255,0.6)'` |  |
-| indicatorActiveColor | `string` | `VUI_COLOR.white` |  |
+| indicatorColor | `string` | `'rgba(255,255,255,0.6)'` | 指示器颜色 |
+| indicatorActiveColor | `string` | `VUI_COLOR.white` | 当前选中指示器的颜色 |
 
 **事件**
 
@@ -705,4 +717,250 @@
 | --- | --- |
 | `change` | 切换时触发 |
 | `click` | 点击图片时触发 |
+
+---
+
+## AI 组件
+
+### vui-chat-bubble
+
+**Chat Bubble 对话消息气泡**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| content | `string` | `''` | 消息文本内容 |
+| placement | `string` | `'left'` | 气泡位置 left / right，默认 left |
+| avatar | `string` | `''` | 头像图片地址 |
+| name | `string` | `''` | 名称 |
+| showAvatar | `boolean` | `true` | 是否显示头像 |
+| status | `string` | `''` | 消息状态 '' / loading / error |
+| time | `string` | `''` | 时间文本 |
+| maxWidth | `string` | `'76%'` | 气泡最大宽度 |
+| color | `string` | `''` | 气泡背景色 |
+| textColor | `string` | `''` | 文字颜色 |
+| selectable | `boolean` | `true` | 文字是否可选中 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `click` | 点击气泡时触发 |
+| `longpress` | 长按气泡时触发 |
+
+### vui-chat-input
+
+**Chat Input 对话输入框**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| modelValue | `string` | `''` | 输入内容，支持 v-model |
+| placeholder | `string` | `'输入消息，Enter 发送'` | 占位文案 |
+| disabled | `boolean` | `false` | 是否禁用 |
+| loading | `boolean` | `false` | 是否处于生成中（显示停止按钮） |
+| autoHeight | `boolean` | `true` | 是否随内容自适应高度 |
+| maxlength | `number` | `-1` | 最大输入长度 |
+| showCount | `boolean` | `false` | 是否显示字数 |
+| sendText | `string` | `'发送'` | 发送按钮文案 |
+| stopText | `string` | `'停止'` | 停止按钮文案 |
+| showVoice | `boolean` | `false` | 是否显示语音入口 |
+| confirmType | `string` | `'send'` | 键盘右下角按钮类型 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `update` | :modelValue 输入内容变化 |
+| `send` | 点击发送时触发，参数为当前文本 |
+| `stop` | 生成中点击停止时触发 |
+| `voice` | 点击语音入口时触发 |
+| `focus` | 输入框聚焦 |
+| `blur` | 输入框失焦 |
+| `clear` | 内容被清空 |
+
+### vui-typing
+
+**Typing 打字机流式文本**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| text | `string` | `''` | 完整文本内容 |
+| speed | `number` | `40` | 每个字符的间隔毫秒数 |
+| autoplay | `boolean` | `true` | 挂载后是否自动开始 |
+| typing | `boolean` | `false` | 是否仍处于流式输出中 |
+| showCursor | `boolean` | `true` | 是否显示光标 |
+| cursorChar | `string` | `'▍'` | 光标字符 |
+| selectable | `boolean` | `true` | 文字是否可选中 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `change` | 每输出一个字符时触发，参数为当前已输出文本 |
+| `finish` | 全部文本输出完成时触发，参数为完整文本 |
+
+### vui-thinking
+
+**Thinking 推理过程展示**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| modelValue | `boolean` | `false` | 是否展开，支持 v-model |
+| title | `string` | `'思考过程'` | 标题文案 |
+| content | `string` | `''` | 推理正文 |
+| loading | `boolean` | `false` | 是否仍在推理中 |
+| duration | `number` | `0` | 耗时秒数 |
+| maxHeight | `string` | `'600rpx'` | 展开后最大高度 |
+| defaultExpand | `boolean` | `false` | 初始是否展开 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `update` | :modelValue 展开状态变化 |
+| `toggle` | 展开状态变化时触发，参数为当前是否展开 |
+
+### vui-feedback
+
+**Feedback 回答评价**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| modelValue | `string` | `''` | 当前评价 '' / like / dislike，支持 v-model |
+| likeText | `string` | `'有帮助'` | 赞同文案 |
+| dislikeText | `string` | `'没帮助'` | 不赞同文案 |
+| showText | `boolean` | `false` | 是否显示文案 |
+| disabled | `boolean` | `false` | 是否禁用 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `update` | :modelValue 评价变化 |
+| `change` | 评价变化时触发，参数为当前值 |
+| `like` | 选中赞同 |
+| `dislike` | 选中不赞同 |
+
+### vui-copy
+
+**Copy 一键复制**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| content | `string` | `''` | 需要复制的内容 |
+| text | `string` | `'复制'` | 按钮显示文案 |
+| showIcon | `boolean` | `true` | 是否显示图标 |
+| successText | `string` | `'已复制'` | 复制成功提示文案 |
+| duration | `number` | `1500` | 提示停留时间 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `success` | 复制成功，参数为已复制的内容 |
+| `error` | 复制失败，参数为错误对象 |
+
+### vui-code
+
+**Code 代码块**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| code | `string` | `''` | 代码内容 |
+| language | `string` | `''` | 语言标识（仅用于展示标签） |
+| title | `string` | `''` | 标题，不传则显示 language |
+| showLineNumbers | `boolean` | `false` | 是否显示行号 |
+| showCopy | `boolean` | `true` | 是否显示复制按钮 |
+| wrap | `boolean` | `true` | 是否自动换行 |
+| maxHeight | `string` | `'600rpx'` | 最大高度，超出滚动 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `copy` | 点击复制按钮，参数为已复制的内容 |
+
+### vui-prompt-card
+
+**Prompt Card 提示词卡片**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| modelValue | `boolean` | `false` | 是否选中，支持 v-model |
+| title | `string` | `''` | 标题 |
+| content | `string` | `''` | 提示词内容 |
+| tags | `Array` | `[]` | 标签数组 |
+| icon | `string` | `''` | 图标字符或图片地址 |
+| disabled | `boolean` | `false` | 是否禁用 |
+| selectable | `boolean` | `true` | 是否可选中 |
+| maxLines | `number` | `2` | 内容最大行数 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `click` | 点击卡片时触发 |
+| `update` | :modelValue 选中状态变化 |
+| `change` | 选中状态变化时触发，参数为当前是否选中 |
+
+### vui-markdown
+
+**Markdown 轻量 Markdown 渲染**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| content | `string` | `''` | Markdown 源文本 |
+| selectable | `boolean` | `true` | 文字是否可选中 |
+| showCopy | `boolean` | `true` | 代码块是否显示复制按钮 |
+| codeMaxHeight | `string` | `'600rpx'` | 代码块最大高度 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `copy` | 代码块复制成功，参数为已复制内容 |
+
+### vui-model-select
+
+**Model Select 模型选择**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| modelValue | `string` | `''` | 选中值，支持 v-model |
+| options | `Array` | `[]` | 模型列表 [{ label, value, desc, tag, icon, disabled }] |
+| title | `string` | `'选择模型'` | 弹层标题 |
+| placeholder | `string` | `'请选择模型'` | 占位文案 |
+| disabled | `boolean` | `false` | 是否禁用 |
+| clearable | `boolean` | `false` | 是否可清空 |
+| showDesc | `boolean` | `false` | 是否在触发器上显示当前模型的描述 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `update` | :modelValue 选中值变化 |
+| `change` | 选中值变化时触发，参数为选中项对象 |
+
+### vui-voice-input
+
+**Voice Input 语音输入**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| modelValue | `boolean` | `false` | 是否正在录音，支持 v-model |
+| disabled | `boolean` | `false` | 是否禁用 |
+| maxDuration | `number` | `60` | 最长录音秒数 |
+| tipText | `string` | `'按住说话'` | 按住时的提示文案 |
+| releaseText | `string` | `'松手发送'` | 松手发送提示 |
+| format | `string` | `'mp3'` | 录音格式 mp3 / aac / wav |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `update` | :modelValue 录音状态变化 |
+| `start` | 开始录音 |
+| `stop` | 结束录音（非取消） |
+| `cancel` | 上滑取消录音 |
+| `finish` | 录音结束并拿到文件，参数为 { tempFilePath, duration, fileSize } |
+| `error` | 录音失败或当前环境不支持录音 |
 

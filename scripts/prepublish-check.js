@@ -9,6 +9,7 @@
  *   4. types/index.d.ts 覆盖 index.js 导出的全部组件
  *   5. 必备文件（README.md / LICENSE / docs/API.md）存在
  *   6. package.json 的 files 字段包含 uni_modules/
+ *   7. 模板作用域（模板引用了不存在或不可访问的标识符）
  *
  * 任一项失败则以非 0 退出码终止发布。
  */
@@ -111,10 +112,23 @@ if (!pkg.version || !/^\d+\.\d+\.\d+/.test(pkg.version)) {
 }
 if (!pkg.types) warns.push('package.json 未声明 types 字段，编辑器将无法自动提示');
 
+// 7. 模板作用域校验
+let tmplChecked = 0;
+try {
+  const { checkTemplateRefs } = require('./check-template-refs');
+  const res = checkTemplateRefs({ quiet: true });
+  tmplChecked = res.stats.files;
+  errors.push(...res.errors);
+  warns.push(...res.warns);
+} catch (e) {
+  warns.push(`模板作用域校验未能执行: ${e.message}`);
+}
+
 // 输出
 console.log('\n[vui-uniapp] 发布前校验');
 console.log(`  组件数量: ${comps.length}`);
 console.log(`  包版本:   ${pkg.version}`);
+console.log(`  模板已查: ${tmplChecked} 个组件`);
 
 if (warns.length) {
   console.log('\n  警告:');

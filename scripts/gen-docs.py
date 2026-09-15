@@ -22,6 +22,9 @@ CATEGORY = {
     '反馈组件': ['vui-message', 'vui-notification', 'vui-modal', 'vui-drawer',
                  'vui-loading', 'vui-tooltip', 'vui-popover', 'vui-backtop'],
     '媒体组件': ['vui-carousel'],
+    'AI 组件': ['vui-chat-bubble', 'vui-chat-input', 'vui-typing', 'vui-thinking',
+                'vui-feedback', 'vui-copy', 'vui-code', 'vui-prompt-card',
+                'vui-markdown', 'vui-model-select', 'vui-voice-input'],
 }
 
 
@@ -259,12 +262,14 @@ README = """# Virtual UI (VUI)
 - [组件总览](#组件总览)
 - [TypeScript 支持](#typescript-支持)
 - [常见问题](#常见问题)
+- [版本与发布](#版本与发布)
 - [贡献指南](#贡献指南)
 - [许可证](#许可证)
 
 ## 特性
 
 - **跨端一致**：iOS / Android / H5 / 各家小程序，一套代码多端运行
+- **AI 场景就绪**：内置对话气泡、流式打字机、推理过程面板、Markdown 渲染、模型选择等 11 个 AI 组件
 - **零配置引入**：基于 easycom，配好一次后无需 import，直接写标签
 - **可换肤**：全部颜色收敛到 SCSS 变量，改一个 `$vui-primary` 即可全库换色
 - **类型友好**：内置 TypeScript 声明，编辑器可提示 props 与事件
@@ -515,21 +520,73 @@ import type { VuiTableProps } from 'vui-uniapp';
 给该实例传 `color` / `activeColor` 之类的 props（具体见 [docs/API.md](docs/API.md)），
 或在页面里用更高优先级的作用域样式覆盖。
 
+## 版本与发布
+
+> **本仓库的硬性规则：任何一次面向用户的更新，都必须同步提升版本号并发布到 npm。**
+> 不允许出现「代码已改、版本没动」或「版本已升、包没发」的状态。
+
+完整规则见 [AGENTS.md](AGENTS.md)（供 AI 协作助手遵循）与 [CONTRIBUTING.md](CONTRIBUTING.md)（供人阅读）。
+
+### 一键发布
+
+```bash
+npm run release            # 修 bug / 样式 / 文档（patch）
+npm run release -- minor   # 新增组件、新增 props/事件/插槽
+npm run release -- major   # 删除或重命名 props、改变默认行为
+```
+
+`npm run release` 会依次完成：
+
+| 步骤 | 动作 |
+| --- | --- |
+| 1 | 跑 `scripts/prepublish-check.js` 与 `scripts/check-template-refs.js` 校验 |
+| 2 | 重新生成 `index.js`、`types/index.d.ts`、`docs/API.md`、`README.md` |
+| 3 | 提升 `package.json` 与各组件 `package.json` 的版本号 |
+| 4 | 提交并打 `vX.Y.Z` tag |
+| 5 | 推送分支与 tag 到远端 |
+| 6 | `npm publish --access public` |
+| 7 | 回查 registry 确认已上线 |
+
+加 `--dry-run` 可只跑校验与产物生成、不写入任何内容：
+
+```bash
+npm run release -- minor --dry-run
+```
+
+### 版本号规则
+
+| 变更类型 | 版本级别 | 示例 |
+| --- | --- | --- |
+| 新增组件、新增 props / 事件 / 插槽 | minor | 1.1.0 -> 1.2.0 |
+| 修复 bug、样式调整、文档更新 | patch | 1.1.0 -> 1.1.1 |
+| 删除或重命名 props、改变默认行为 | major | 1.1.0 -> 2.0.0 |
+
+### 发布凭证
+
+`npm publish` 需要**带 Bypass 2FA** 的 npm token（普通 token 会报 `EOTP`）。
+把 token 写入**项目级** `.npmrc`：
+
+```
+//registry.npmjs.org/:_authToken=<你的 token>
+```
+
+`.npmrc` 已在 `.gitignore` 中，**不会被提交**。token 格式必须以 `npm_` 开头。
+
 ## 贡献指南
 
-我们欢迎任何贡献！如果你发现错误或有改进的想法，请遵循以下步骤：
+我们欢迎任何贡献！完整流程见 [CONTRIBUTING.md](CONTRIBUTING.md)，摘要如下：
 
 1. Fork 本仓库；
 2. 创建分支（`git checkout -b feature-name`）；
 3. 修改代码。若新增组件，请保持 `uni_modules/vui-xxx/components/vui-xxx/vui-xxx.vue` 的目录结构；
-4. 运行 `node scripts/prepublish-check.js` 确认结构完整；
-5. 提交（`git commit -m 'Add some feature'`）；
-6. 推送并创建 Pull Request。
+4. 新增组件后跑一次 `python scripts/inject-theme.py` 注入主题变量兜底块，
+   并在 `scripts/gen-docs.py` 的 `CATEGORY` 中登记该组件；
+5. 运行 `npm run check` 与 `npm run check:template` 确认无误；
+6. 按[版本与发布](#版本与发布)提升版本号并发布（`npm run release`）；
+7. 推送并创建 Pull Request。
 
-新增组件后，请同时：
-
-- 在 `uni.scss` 中补充（如有）新的主题变量；
-- 更新 `docs/API.md`（可通过 `python scripts/gen-docs.py` 或按现有格式手写）。
+**请勿手工编辑自动生成的产物**：`index.js`、`types/index.d.ts`、`docs/API.md`、`README.md`
+均由脚本生成，改组件后跑 `npm run gen` 重新生成即可。
 
 ## 许可证
 
