@@ -1,11 +1,11 @@
 {
   "id": "vui-date-picker",
   "displayName": "vui-date-picker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 日期选择器组件",
   "keywords": [
     "vui-date-picker"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

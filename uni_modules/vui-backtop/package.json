@@ -1,11 +1,11 @@
 {
   "id": "vui-backtop",
   "displayName": "vui-backtop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 回到顶部组件",
   "keywords": [
     "vui-backtop"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

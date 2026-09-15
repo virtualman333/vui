@@ -1,11 +1,11 @@
 {
   "id": "vui-auto-scroll",
   "displayName": "vui-auto-scroll",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "vui-auto-scroll",
   "keywords": [
     "vui-auto-scroll"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

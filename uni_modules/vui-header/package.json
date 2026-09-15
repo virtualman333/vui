@@ -1,11 +1,11 @@
 {
   "id": "vui-header",
   "displayName": "vui-header",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "vui-header",
   "keywords": [
     "vui-header"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

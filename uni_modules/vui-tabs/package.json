@@ -1,11 +1,11 @@
 {
   "id": "vui-tabs",
   "displayName": "vui-tabs",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 标签页组件",
   "keywords": [
     "vui-tabs"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

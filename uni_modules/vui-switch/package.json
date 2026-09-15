@@ -1,11 +1,11 @@
 {
   "id": "vui-switch",
   "displayName": "vui-switch",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "vui-switch",
   "keywords": [
     "vui-switch"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

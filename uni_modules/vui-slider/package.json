@@ -1,11 +1,11 @@
 {
   "id": "vui-slider",
   "displayName": "vui-slider",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 滑块组件",
   "keywords": [
     "vui-slider"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

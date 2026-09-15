@@ -1,11 +1,11 @@
 {
   "id": "vui-modal",
   "displayName": "vui-modal",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 对话框组件",
   "keywords": [
     "vui-modal"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

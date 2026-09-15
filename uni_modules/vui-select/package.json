@@ -1,11 +1,11 @@
 {
   "id": "vui-select",
   "displayName": "vui-select",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 下拉选择组件",
   "keywords": [
     "vui-select"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

@@ -1,11 +1,11 @@
 {
   "id": "vui-tag",
   "displayName": "vui-tag",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "vui-tag",
   "keywords": [
     "vui-tag"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

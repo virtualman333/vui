@@ -1,11 +1,11 @@
 {
   "id": "vui-table",
   "displayName": "vui-table",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 表格组件",
   "keywords": [
     "vui-table"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

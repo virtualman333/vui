@@ -1,11 +1,11 @@
 {
   "id": "vui-form",
   "displayName": "vui-form",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 表单组件（含 vui-form-item）",
   "keywords": [
     "vui-form"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

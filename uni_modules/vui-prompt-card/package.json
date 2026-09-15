@@ -1,11 +1,11 @@
 {
   "id": "vui-prompt-card",
   "displayName": "vui-prompt-card",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 提示词卡片组件",
   "keywords": [
     "vui-prompt-card"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

@@ -1,11 +1,11 @@
 {
   "id": "vui-checkbox",
   "displayName": "vui-checkbox",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 复选框组件",
   "keywords": [
     "vui-checkbox"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

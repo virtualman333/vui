@@ -1,11 +1,11 @@
 {
   "id": "vui-steps",
   "displayName": "vui-steps",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 步骤条组件",
   "keywords": [
     "vui-steps"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

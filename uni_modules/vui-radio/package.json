@@ -1,11 +1,11 @@
 {
   "id": "vui-radio",
   "displayName": "vui-radio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 单选框组件",
   "keywords": [
     "vui-radio"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

@@ -1,11 +1,11 @@
 {
   "id": "vui-tooltip",
   "displayName": "vui-tooltip",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "VUI 文字提示组件",
   "keywords": [
     "vui-tooltip"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"

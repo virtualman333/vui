@@ -1,11 +1,11 @@
 {
   "id": "vui-region-picker",
   "displayName": "vui-region-picker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "vui-region-picker",
   "keywords": [
     "vui-region-picker"
-],
+  ],
   "repository": "",
   "engines": {
     "HBuilderX": "^3.1.0"
