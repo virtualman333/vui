@@ -1,0 +1,19 @@
+# uni-app 构建产物与缓存
+unpackage/
+.hbuilderx/
+
+# 依赖
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# 编辑器与系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# npm 发布产物
+*.tgz
