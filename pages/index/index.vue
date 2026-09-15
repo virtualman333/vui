@@ -6,6 +6,7 @@
 		<vui-header></vui-header>
 		<view class="entry">
 			<button class="entry-btn" type="default" @click="go('/pages/demo/demo')">组件总览</button>
+			<button class="entry-btn" type="primary" @click="go('/pages/demo/ai')">AI 组件演示</button>
 			<button class="entry-btn" type="default" @click="go('/pages/Test/Test')">开发者测试页面</button>
 		</view>
 	</view>
