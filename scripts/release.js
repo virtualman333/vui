@@ -239,13 +239,29 @@ if (!run('npm', ['publish', '--access', 'public']).ok) {
 }
 
 // ---------- 7. 回查 ----------
+// 注意：npm publish 成功时 registry 返回的是 202 Accepted（异步落库），
+// 不是 201。刚发完就查 version 端点通常还是 404，必须轮询等待。
 console.log('\n[7/7] 回查 registry');
-const view = run('npm', ['view', `vui-uniapp@${nextVersion}`, 'version'], { capture: true });
-if (view.ok) {
+const POLL_TIMES = 12;
+const POLL_GAP_MS = 15000;
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+let online = false;
+for (let i = 1; i <= POLL_TIMES; i++) {
+  const view = run('npm', ['view', `vui-uniapp@${nextVersion}`, 'version'], { capture: true });
+  if (view.ok) {
+    online = true;
+    break;
+  }
+  if (i === 1) console.log(`  第 1 次未查到（正常，registry 异步处理中），开始轮询…`);
+  if (i < POLL_TIMES) sleep(POLL_GAP_MS);
+}
+if (online) {
   log('ok', `vui-uniapp@${nextVersion} 已上线`);
 } else {
-  console.log('  ! 回查未成功（可能是 CDN 传播延迟）。');
-  console.log(`    请稍后手动确认: npm view vui-uniapp@${nextVersion} version`);
+  console.log(`  ! 轮询 ${POLL_TIMES} 次仍未回查到 v${nextVersion}。`);
+  console.log('    publish 返回 202 说明请求已被接收，通常只是处理慢，不必重复发布。');
+  console.log(`    稍后手动确认: npm view vui-uniapp@${nextVersion} version`);
+  console.log(`    确认地址:     https://registry.npmjs.org/vui-uniapp/${nextVersion}`);
 }
 
 console.log(`\n  发布完成: vui-uniapp@${nextVersion}`);

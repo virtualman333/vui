@@ -146,6 +146,13 @@ npm run check:template
 3. `publish` 报 `E404 ... is not in this registry` **不等于包名有问题**。
    npm 在鉴权失败时故意返回 404 而非 403，避免泄露包是否存在。排查顺序应为：
    `token 前缀 → npm whoami → publish 的真实错误码（EOTP / E404）`。
+4. **`publish` 成功时 registry 返回 `202 Accepted`，不是 `201`**，且 CLI 会提示
+   `Your package is being processed and may take a few minutes to become available`。
+   这意味着版本**异步落库**：刚发完立刻访问
+   `https://registry.npmjs.org/vui-uniapp/<版本>` 或 `npm view` 很可能仍是 **404**，
+   `dist-tags.latest` 也还指向上一个版本。**这是正常的，不要因此重复发布**
+   （重发会撞「版本号已存在」）。用 `curl` 轮询版本端点直到 200 再下结论，
+   实测通常需要几分钟。`scripts/release.js` 的第 7 步已内置轮询。
 
 ---
 
