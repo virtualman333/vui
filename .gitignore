@@ -17,3 +17,7 @@ Thumbs.db
 
 # npm 发布产物
 *.tgz
+
+# 本地 npm 凭证（严禁提交，含 _authToken 明文）
+.npmrc
+.npmrc.local
