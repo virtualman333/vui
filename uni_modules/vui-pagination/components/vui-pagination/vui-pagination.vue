@@ -23,6 +23,11 @@
 </template>
 
 <script>
+/* VUI 主题色（与 uni.scss 中 $vui-* 变量保持一致，可通过 props 覆盖） */
+const VUI_COLOR = {
+	primary: '#2979ff',
+	white: '#fff',
+};
 /**
  * Pagination 分页
  * @description 数据过多时分页展示
@@ -82,7 +87,7 @@ export default {
 			return Math.max(1, Math.ceil((Number(this.total) || 0) / size));
 		},
 		activeColor() {
-			return this.color || '#2979ff';
+			return this.color || VUI_COLOR.primary;
 		},
 		pages() {
 			const count = this.pageCount;
@@ -122,7 +127,7 @@ export default {
 		},
 		textStyle(page) {
 			if (page !== this.current) return '';
-			return 'color:#fff;';
+			return 'color:' + VUI_COLOR.white + ';';
 		},
 		update(page) {
 			const target = Math.min(Math.max(1, page), this.pageCount);
@@ -145,6 +150,35 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+/* ===== VUI 主题变量（兜底定义，可在项目 uni.scss 中覆盖） ===== */
+/* 功能色 */
+$vui-primary: #2979ff !default;
+$vui-success: #18bc37 !default;
+$vui-warning: #f3a73f !default;
+$vui-error: #e43d33 !default;
+$vui-info: #8f939c !default;
+$vui-region-active-color: #f07b00 !default;
+/* 文字色 */
+$vui-text-color: #333 !default;
+$vui-text-color-regular: #606266 !default;
+$vui-text-color-secondary: #909399 !default;
+$vui-text-color-placeholder: #c0c4cc !default;
+$vui-text-color-inverse: #fff !default;
+/* 边框色 */
+$vui-border-color: #dcdfe6 !default;
+$vui-border-color-light: #ebeef5 !default;
+$vui-border-color-lighter: #e5e6eb !default;
+/* 填充与背景色 */
+$vui-bg-color: #fff !default;
+$vui-bg-color-hover: #f2f3f5 !default;
+$vui-fill-color: #f1f1f1 !default;
+$vui-fill-color-light: #f5f7fa !default;
+$vui-fill-color-lighter: #fafafa !default;
+$vui-track-color: #ebedf0 !default;
+$vui-active-bg-color: #f5f9ff !default;
+$vui-gray-color: #ccc !default;
+$vui-white: #fff !default;
+/* ===== VUI 主题变量结束 ===== */
 .vui-pagination {
 	display: flex;
 	flex-direction: row;
@@ -154,7 +188,7 @@ export default {
 	&__total {
 		margin-right: 16rpx;
 		font-size: 26rpx;
-		color: #606266;
+		color: $vui-text-color-regular;
 	}
 
 	&__pager {
@@ -173,9 +207,9 @@ export default {
 		margin: 0 6rpx;
 		padding: 0 8rpx;
 		box-sizing: border-box;
-		border: 1px solid #e5e6eb;
+		border: 1px solid $vui-border-color-lighter;
 		border-radius: 8rpx;
-		background-color: #fff;
+		background-color: $vui-bg-color;
 		/* #ifdef H5 */
 		cursor: pointer;
 		/* #endif */
@@ -184,16 +218,16 @@ export default {
 	&__btn-text,
 	&__item-text {
 		font-size: 26rpx;
-		color: #606266;
+		color: $vui-text-color-regular;
 	}
 
 	&__item.is-active {
-		background-color: #2979ff;
-		border-color: #2979ff;
+		background-color: $vui-primary;
+		border-color: $vui-primary;
 	}
 
 	&__item.is-active &__item-text {
-		color: #fff;
+		color: $vui-text-color-inverse;
 	}
 
 	&__item.is-ellipsis {

@@ -16,6 +16,15 @@
 </template>
 
 <script>
+/* VUI 主题色（与 uni.scss 中 $vui-* 变量保持一致，可通过 props 覆盖） */
+const VUI_COLOR = {
+	primary: '#2979ff',
+	text: '#333',
+	placeholder: '#c0c4cc',
+	border: '#dcdfe6',
+	borderLight: '#e5e6eb',
+	white: '#fff',
+};
 /**
  * Steps 步骤条
  * @description 引导用户按流程完成任务
@@ -61,7 +70,7 @@ export default {
 			return typeof this.size === 'number' ? this.size + 'rpx' : this.size;
 		},
 		activeColor() {
-			return this.color || '#2979ff';
+			return this.color || VUI_COLOR.primary;
 		}
 	},
 	methods: {
@@ -87,23 +96,23 @@ export default {
 			const current = this.isCurrent(index);
 			const size = this.dotSize;
 			return 'width:' + size + ';height:' + size + ';line-height:' + size + ';' +
-				'border-color:' + (finish || current ? this.activeColor : '#dcdfe6') + ';' +
-				'background-color:' + (finish ? this.activeColor : '#fff') + ';';
+				'border-color:' + (finish || current ? this.activeColor : VUI_COLOR.border) + ';' +
+				'background-color:' + (finish ? this.activeColor : VUI_COLOR.white) + ';';
 		},
 		dotTextStyle(index) {
 			const num = typeof this.size === 'number' ? this.size : parseFloat(this.size) || 48;
 			const finish = this.isFinish(index);
 			const current = this.isCurrent(index);
 			return 'font-size:' + num * 0.55 + 'rpx;color:' +
-				(finish ? '#fff' : current ? this.activeColor : '#c0c4cc') + ';';
+				(finish ? VUI_COLOR.white : current ? this.activeColor : VUI_COLOR.placeholder) + ';';
 		},
 		lineStyle(index) {
-			return 'background-color:' + (this.isFinish(index) ? this.activeColor : '#e5e6eb') + ';';
+			return 'background-color:' + (this.isFinish(index) ? this.activeColor : VUI_COLOR.borderLight) + ';';
 		},
 		titleStyle(index) {
 			const finish = this.isFinish(index);
 			const current = this.isCurrent(index);
-			return 'color:' + (finish || current ? '#333' : '#c0c4cc') + ';';
+			return 'color:' + (finish || current ? VUI_COLOR.text : VUI_COLOR.placeholder) + ';';
 		},
 		onClick(index) {
 			this.$emit('update:modelValue', index);
@@ -114,6 +123,35 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+/* ===== VUI 主题变量（兜底定义，可在项目 uni.scss 中覆盖） ===== */
+/* 功能色 */
+$vui-primary: #2979ff !default;
+$vui-success: #18bc37 !default;
+$vui-warning: #f3a73f !default;
+$vui-error: #e43d33 !default;
+$vui-info: #8f939c !default;
+$vui-region-active-color: #f07b00 !default;
+/* 文字色 */
+$vui-text-color: #333 !default;
+$vui-text-color-regular: #606266 !default;
+$vui-text-color-secondary: #909399 !default;
+$vui-text-color-placeholder: #c0c4cc !default;
+$vui-text-color-inverse: #fff !default;
+/* 边框色 */
+$vui-border-color: #dcdfe6 !default;
+$vui-border-color-light: #ebeef5 !default;
+$vui-border-color-lighter: #e5e6eb !default;
+/* 填充与背景色 */
+$vui-bg-color: #fff !default;
+$vui-bg-color-hover: #f2f3f5 !default;
+$vui-fill-color: #f1f1f1 !default;
+$vui-fill-color-light: #f5f7fa !default;
+$vui-fill-color-lighter: #fafafa !default;
+$vui-track-color: #ebedf0 !default;
+$vui-active-bg-color: #f5f9ff !default;
+$vui-gray-color: #ccc !default;
+$vui-white: #fff !default;
+/* ===== VUI 主题变量结束 ===== */
 .vui-steps {
 	display: flex;
 
@@ -159,13 +197,13 @@ export default {
 		box-sizing: border-box;
 		border-width: 1px;
 		border-style: solid;
-		border-color: #dcdfe6;
+		border-color: $vui-border-color;
 		border-radius: 50%;
-		background-color: #fff;
+		background-color: $vui-bg-color;
 	}
 
 	&__line {
-		background-color: #e5e6eb;
+		background-color: $vui-border-color-lighter;
 
 		.vui-steps--horizontal & {
 			flex: 1;
@@ -197,13 +235,13 @@ export default {
 
 	&__title {
 		font-size: 28rpx;
-		color: #333;
+		color: $vui-text-color;
 	}
 
 	&__desc {
 		margin-top: 4rpx;
 		font-size: 24rpx;
-		color: #909399;
+		color: $vui-text-color-secondary;
 	}
 }
 </style>

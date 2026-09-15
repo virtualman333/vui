@@ -28,6 +28,12 @@
 </template>
 
 <script>
+/* VUI 主题色（与 uni.scss 中 $vui-* 变量保持一致，可通过 props 覆盖） */
+const VUI_COLOR = {
+	primary: '#2979ff',
+	placeholder: '#c0c4cc',
+	white: '#fff',
+};
 /**
  * Calendar 日历
  * @description 以日历形式展示日期并支持选择
@@ -83,7 +89,7 @@ export default {
 	},
 	computed: {
 		activeColor() {
-			return this.color || '#2979ff';
+			return this.color || VUI_COLOR.primary;
 		},
 		weekLabels() {
 			const start = Number(this.startWeek) || 0;
@@ -182,9 +188,9 @@ export default {
 			return cell.selected ? 'background-color:' + this.activeColor + ';' : '';
 		},
 		dayTextStyle(cell) {
-			if (cell.selected) return 'color:#fff;';
+			if (cell.selected) return 'color:' + VUI_COLOR.white + ';';
 			if (cell.today) return 'color:' + this.activeColor + ';';
-			if (!cell.current) return 'color:#c0c4cc;';
+			if (!cell.current) return 'color:' + VUI_COLOR.placeholder + ';';
 			return '';
 		}
 	}
@@ -192,9 +198,38 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+/* ===== VUI 主题变量（兜底定义，可在项目 uni.scss 中覆盖） ===== */
+/* 功能色 */
+$vui-primary: #2979ff !default;
+$vui-success: #18bc37 !default;
+$vui-warning: #f3a73f !default;
+$vui-error: #e43d33 !default;
+$vui-info: #8f939c !default;
+$vui-region-active-color: #f07b00 !default;
+/* 文字色 */
+$vui-text-color: #333 !default;
+$vui-text-color-regular: #606266 !default;
+$vui-text-color-secondary: #909399 !default;
+$vui-text-color-placeholder: #c0c4cc !default;
+$vui-text-color-inverse: #fff !default;
+/* 边框色 */
+$vui-border-color: #dcdfe6 !default;
+$vui-border-color-light: #ebeef5 !default;
+$vui-border-color-lighter: #e5e6eb !default;
+/* 填充与背景色 */
+$vui-bg-color: #fff !default;
+$vui-bg-color-hover: #f2f3f5 !default;
+$vui-fill-color: #f1f1f1 !default;
+$vui-fill-color-light: #f5f7fa !default;
+$vui-fill-color-lighter: #fafafa !default;
+$vui-track-color: #ebedf0 !default;
+$vui-active-bg-color: #f5f9ff !default;
+$vui-gray-color: #ccc !default;
+$vui-white: #fff !default;
+/* ===== VUI 主题变量结束 ===== */
 .vui-calendar {
 	width: 100%;
-	background-color: #fff;
+	background-color: $vui-bg-color;
 
 	&__header {
 		display: flex;
@@ -207,13 +242,13 @@ export default {
 	&__arrow {
 		padding: 0 24rpx;
 		font-size: 40rpx;
-		color: #909399;
+		color: $vui-text-color-secondary;
 	}
 
 	&__title {
 		font-size: 30rpx;
 		font-weight: bold;
-		color: #333;
+		color: $vui-text-color;
 	}
 
 	&__week {
@@ -227,7 +262,7 @@ export default {
 		flex: 1;
 		text-align: center;
 		font-size: 24rpx;
-		color: #909399;
+		color: $vui-text-color-secondary;
 	}
 
 	&__body {
@@ -252,7 +287,7 @@ export default {
 		width: 64rpx;
 		height: 64rpx;
 		font-size: 26rpx;
-		color: #606266;
+		color: $vui-text-color-regular;
 		border-radius: 50%;
 	}
 
