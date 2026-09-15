@@ -7,8 +7,8 @@
 			:duration="duration"
 			:circular="circular"
 			:indicator-dots="indicator && indicatorType === 'dot'"
-			indicator-color="rgba(255,255,255,0.6)"
-			:indicator-active-color="VUI_COLOR.white"
+			:indicator-color="indicatorColor"
+			:indicator-active-color="indicatorActiveColor"
 			@change="onChange"
 		>
 			<swiper-item v-for="(item, index) in list" :key="index">
@@ -38,6 +38,8 @@ const VUI_COLOR = {
  * @property {Boolean} circular 是否采用衔接滑动
  * @property {Boolean} indicator 是否显示指示器
  * @property {String} indicatorType 指示器类型 dot / number
+ * @property {String} indicatorColor 指示器颜色
+ * @property {String} indicatorActiveColor 当前选中指示器的颜色
  * @property {String} mode 图片裁剪模式
  * @property {Boolean} showTitle 是否显示图片标题
  * @event {Function} change 切换时触发
