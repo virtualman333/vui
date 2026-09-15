@@ -74,3 +74,47 @@ $uni-color-subtitle: #555555; // 二级标题颜色
 $uni-font-size-subtitle:26px;
 $uni-color-paragraph: #3F536E; // 文章段落颜色
 $uni-font-size-paragraph:15px;
+
+
+/**
+ * ============================================================
+ * VUI 组件库主题变量 —— 自定义主题请修改这里的值
+ * ============================================================
+ * 说明：
+ * 1. 此文件（uni.scss）由 uni-app 自动注入到所有组件的样式编译上下文，
+ *    因此在这里赋值即可全局覆盖 VUI 组件的外观，无需 import。
+ * 2. 以下变量在 VUI 组件内部均有 !default 兜底定义，
+ *    所以「不写这几行也能正常跑」，写了则优先生效。
+ * 3. 改完保存后重新编译即可看到效果，不需要改动任何组件文件。
+ */
+
+/* 功能色（品牌主色建议改 $vui-primary） */
+$vui-primary: #2979ff;
+$vui-success: #18bc37;
+$vui-warning: #f3a73f;
+$vui-error: #e43d33;
+$vui-info: #8f939c;
+$vui-region-active-color: #f07b00; // 地区选择器激活色
+
+/* 文字色 */
+$vui-text-color: #333;
+$vui-text-color-regular: #606266;
+$vui-text-color-secondary: #909399;
+$vui-text-color-placeholder: #c0c4cc;
+$vui-text-color-inverse: #fff;
+
+/* 边框色 */
+$vui-border-color: #dcdfe6;
+$vui-border-color-light: #ebeef5;
+$vui-border-color-lighter: #e5e6eb;
+
+/* 填充与背景色 */
+$vui-bg-color: #fff;
+$vui-bg-color-hover: #f2f3f5;
+$vui-fill-color: #f1f1f1;
+$vui-fill-color-light: #f5f7fa;
+$vui-fill-color-lighter: #fafafa;
+$vui-track-color: #ebedf0; // 进度条 / 滑块轨道底色
+$vui-active-bg-color: #f5f9ff; // 选中项背景
+$vui-gray-color: #ccc;
+$vui-white: #fff;
