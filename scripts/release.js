@@ -49,13 +49,35 @@ function log(step, msg) {
   console.log(`  [${step}] ${msg}`);
 }
 
+/**
+ * Windows 上必须借 shell 才能调用 npm.cmd / python 这类包装脚本，
+ * 但一旦走 shell，参数就会被 cmd.exe 按空格重新切分——
+ * `git commit -m "chore(release): v1.1.0"` 会被拆成 `-m chore(release):` 加
+ * 一个凭空多出来的 pathspec `v1.1.0`，导致提交直接失败。所以含空白或
+ * shell 元字符的参数必须自己加引号。
+ */
+function quoteForShell(arg) {
+  const s = String(arg);
+  if (s === '') return '""';
+  if (!/[\s"&|<>^()%!,;=]/.test(s)) return s;
+  // 按 MS C runtime 规则转义：反斜杠仅在引号前需要翻倍
+  return '"' + s.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, '$1$1') + '"';
+}
+
 function run(cmd, cmdArgs, opts = {}) {
-  const res = spawnSync(cmd, cmdArgs, {
-    cwd: root,
-    stdio: opts.capture ? 'pipe' : 'inherit',
-    encoding: 'utf8',
-    shell: isWin,
-  });
+  const useShell = opts.shell === undefined ? isWin : opts.shell;
+  const res = useShell
+    ? spawnSync([cmd, ...cmdArgs].map(quoteForShell).join(' '), {
+        cwd: root,
+        stdio: opts.capture ? 'pipe' : 'inherit',
+        encoding: 'utf8',
+        shell: true,
+      })
+    : spawnSync(cmd, cmdArgs, {
+        cwd: root,
+        stdio: opts.capture ? 'pipe' : 'inherit',
+        encoding: 'utf8',
+      });
   return {
     ok: res.status === 0,
     status: res.status,
