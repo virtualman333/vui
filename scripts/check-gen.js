@@ -34,8 +34,6 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-// 组件集合的唯一来源（本文件旧实现自己 readdir 了一次）
-const { componentIds } = require('./lib/components');
 
 const root = path.resolve(__dirname, '..');
 
@@ -105,39 +103,15 @@ try {
     console.log(`  重新生成后与已提交产物完全一致（${ARTIFACTS.length} 个文件）`);
   }
 
-  // ── 4. 双向覆盖：uni_modules 组件目录 <-> gen-docs.py 的 CATEGORY ──────
-  // 只比对 CATEGORY 这个白名单本身，不去扫文档正文 —— 正文里 `--vui-text-color`
-  // 这类 CSS 变量、包名 `vui-uniapp`、示例占位符 `vui-xxx` 全都长得像组件名，
-  // 按正则扫正文只会得到一堆误报（第一版就是这么错的）。
-  // 组件集合来自 scripts/lib/components.js（唯一实现），别在这里再 readdir 一次。
-  const comps = componentIds();
-
-  const categorized = readCategoryIds();
-  if (categorized === null) {
-    failed = true;
-    console.log('\n  x 无法从 scripts/gen-docs.py 解析出 CATEGORY 白名单。');
-    console.log('    （该字典是 README.md / docs/API.md 的组件清单唯一来源，解析不到就无法校验）');
-  } else {
-    const notDocumented = comps.filter((id) => !categorized.includes(id));
-    const ghost = categorized.filter((id) => !comps.includes(id));
-
-    if (notDocumented.length || ghost.length) {
-      failed = true;
-      if (notDocumented.length) {
-        console.log(`\n  x ${notDocumented.length} 个组件没登记进 gen-docs.py 的 CATEGORY：`);
-        console.log(`      ${notDocumented.join(', ')}`);
-        console.log('    → docs/API.md 与 README.md 不会收录它们，使用方在文档里根本找不到。');
-      }
-      if (ghost.length) {
-        console.log(`\n  x CATEGORY 里有 ${ghost.length} 个组件在 uni_modules 下不存在：`);
-        console.log(`      ${ghost.join(', ')}`);
-        console.log('    → 组件已删/改名，白名单没同步，生成器会在读它的 .vue 时失败。');
-      }
-      console.log('');
-    } else {
-      console.log(`  组件目录与生成器白名单双向一致（${comps.length} 个组件）`);
-    }
-  }
+  // ── 4. 白名单一致性已搬家 ──────────────────────────────────────────────
+  // 这里原本还做「uni_modules 组件目录 <-> gen-docs.py 的 CATEGORY」双向覆盖检查，
+  // 但它与 check-category.js 会各解析一遍 CATEGORY（同一件事两遍），且旧实现用
+  // `new Set` 去重、丢掉了「登记了几次」：把 vui-button 重复登记进第二个分类时，
+  // 覆盖检查照样打印「双向一致」，而 README 总览表里该组件出现两行、hero 行仍写着
+  // 「48 个组件」—— 同一个文档里两句话互相矛盾却没人报警。
+  // 白名单的全部不变量（恰好一次 / 双向覆盖 / 命名规范 / 解析失败即失败）现在归
+  // `npm run check:category` 一处负责，两条都在 check:all 里。
+  console.log('  组件白名单不变量见 npm run check:category（本节不再重复解析 CATEGORY）');
 } finally {
   try {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -153,30 +127,6 @@ if (failed) {
 console.log('  生成产物一致性校验通过。\n');
 
 // ── 工具 ────────────────────────────────────────────────────────────────
-
-/**
- * 从 gen-docs.py 里读出 CATEGORY 白名单的组件集合。
- * 该字典是字面量（分类名 -> 组件 id 列表），按花括号配对取出块内所有带引号的
- * `vui-*` 字符串即可；解析不到返回 null，绝不放行。
- */
-function readCategoryIds() {
-  const src = fs.readFileSync(path.join(root, 'scripts/gen-docs.py'), 'utf8');
-  const open = src.indexOf('{', src.indexOf('CATEGORY = '));
-  if (open < 0) return null;
-  let depth = 0;
-  let end = -1;
-  for (let i = open; i < src.length; i++) {
-    if (src[i] === '{') depth++;
-    else if (src[i] === '}' && --depth === 0) {
-      end = i;
-      break;
-    }
-  }
-  if (end < 0) return null;
-  const ids = src.slice(open + 1, end).match(/['"](vui-[a-z0-9-]+)['"]/g);
-  if (!ids) return null;
-  return [...new Set(ids.map((s) => s.slice(1, -1)))].sort();
-}
 
 /** 逐行比对，返回差异条数与前几条（生成物行序稳定，逐行比较足够定位） */
 function firstDiffs(before, after) {
