@@ -1,0 +1,1 @@
+import{_ as s}from"./vui-switch.BtWXayJz.js";import{r as a,c as t,w as r,i,o,a as e}from"./index-DjUprmOY.js";import{_ as n,r as u}from"./uni-app.es.CQJRakZK.js";const d=n({data:()=>({}),methods:{}},[["render",function(n,d,m,c,f,p){const l=u(a("vui-switch"),s),h=i;return o(),t(h,null,{default:r((()=>[e(l),e(l,{disable:""}),e(l),e(l),e(l)])),_:1})}]]);export{d as default};
