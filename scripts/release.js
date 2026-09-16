@@ -13,6 +13,9 @@
  *   npm run release -- minor --dry-run   # 只跑校验与产物生成，不写任何东西
  *
  * 执行顺序：
+ *   0. 发布前置检查（凭证是否**可用**、目标版本是否已被 registry 占用、本地 tag
+ *      是否已存在、`.npmrc` 是否被忽略）—— 全部在**任何写入之前**完成，
+ *      因为第 3~5 步不可回退。实现见 scripts/release-preflight.js
  *   1. 发布前校验（`npm run check:all` —— 结构 / 路径 / 类型覆盖 / 模板作用域 /
  *      SFC 语法 / 入口语法 / 类型声明，唯一来源见 AGENTS.md 第八节）
  *   2. 重新生成 index.js、types/index.d.ts、docs/API.md、README.md
@@ -27,6 +30,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { preflight } = require('./release-preflight');
 
 const root = path.resolve(__dirname, '..');
 const isWin = process.platform === 'win32';
@@ -120,24 +124,43 @@ console.log('\n[vui-uniapp] 一键发布');
 console.log(`  模式: ${DRY_RUN ? 'dry-run（不写入任何内容）' : '正式发布'}`);
 console.log(`  版本: ${isExplicitVersion ? `指定为 ${target}` : `按 ${target} 递增`}`);
 
-// ---------- 0. 前置检查 ----------
+// ---------- 0. 前置检查（任何写入之前） ----------
 const pkgPath = path.join(root, 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 const currentVersion = pkg.version;
 const nextVersion = isExplicitVersion ? target : bumpVersion(currentVersion, target);
 console.log(`  版本号: ${currentVersion} -> ${nextVersion}`);
 
-const npmrcPath = path.join(root, '.npmrc');
-const hasUserNpmrc = fs.existsSync(path.join(process.env.USERPROFILE || process.env.HOME || '', '.npmrc'));
-if (!DRY_RUN && !fs.existsSync(npmrcPath) && !hasUserNpmrc) {
-  fail('未找到 .npmrc，发布必然失败。请先写入带 Bypass 2FA 的 npm token：\n' +
-    '      //registry.npmjs.org/:_authToken=<你的 token>\n' +
-    '    注意 token 必须以 npm_ 开头，且创建时勾选 Bypass 2FA。');
-}
-if (fs.existsSync(npmrcPath)) {
-  const gi = run('git', ['check-ignore', '.npmrc'], { capture: true });
-  if (!gi.ok) {
-    fail('.npmrc 未被 .gitignore 忽略！token 有泄露风险，请先在 .gitignore 中加入 .npmrc。');
+// 下面第 1~7 步里，bump / commit / tag / push 都是不可回退的 —— tag 一推，这个版本号
+// 就被占住了。所以「发布一定会失败」的原因必须在这里查完，否则会留下 AGENTS.md
+// 第一节明令禁止的「版本已升、tag 已推、包没发」。
+//
+// 此前这里只判断 `.npmrc` 文件**存不存在**：「文件存在」与「凭证可用」是两件事，
+// 一个只写了 registry 换源配置的 ~/.npmrc 就能骗过它，于是脚本一路走完
+// bump → commit → tag → push，最后倒在 npm publish。现在改为实探（`npm whoami` +
+// 查 registry 是否已有该版本 + 查本地 tag），细节见 scripts/release-preflight.js。
+const pf = preflight({
+  nextVersion,
+  pkgName: pkg.name,
+  cwd: root,
+  run,
+  fileExists: fs.existsSync,
+});
+for (const note of pf.notes) console.log(`  ${note}`);
+if (!pf.ok) {
+  if (DRY_RUN) {
+    // dry-run 的承诺是「不写入任何内容」，不该因为没登录就失败，只提示。
+    console.log('\n  ! dry-run：以下问题在正式发布时会拦住（本次不拦截）');
+    for (const b of pf.blockers) console.log(`    - ${b.title}`);
+  } else {
+    console.error('\n  x 发布前置检查未通过，未做任何写入：');
+    pf.blockers.forEach((b, i) => {
+      console.error(`    [${i + 1}] ${b.title}`);
+      console.error(`        ${b.detail}`);
+      console.error(`        -> ${b.action}`);
+    });
+    console.error('');
+    process.exit(1);
   }
 }
 
@@ -239,7 +262,11 @@ if (!YES && process.stdin.isTTY) {
   console.log('  （非交互环境，自动继续）');
 }
 if (!run('npm', ['publish', '--access', 'public']).ok) {
-  fail('npm publish 失败。常见原因：token 前缀不是 npm_ / token 未开 Bypass 2FA（报 EOTP）/ 版本号已存在于 registry。');
+  fail('npm publish 失败。常见原因：token 前缀不是 npm_ / token 未开 Bypass 2FA（报 EOTP）/ 版本号已存在于 registry。\n' +
+    `    注意：此刻分支与 tag v${nextVersion} 已经推送到远端，处于「版本已升、包没发」的半发布状态。\n` +
+    '    修好上面那个原因后，直接重试同一个版本：\n' +
+    '      npm publish --access public\n' +
+    '    不要重跑 npm run release —— 那会再跳一个版本号，把这个版本永久留在历史里。');
 }
 
 // ---------- 7. 回查 ----------

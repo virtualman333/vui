@@ -188,6 +188,7 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 | `npm run check:pack` | 取 `npm pack --dry-run --json` 的**真实**打包清单：必需文件是否都在、48 个组件的四件套是否齐全、演示页/脚本/工程文件是否误入包、体积是否超标 |
 | `npm run check:theme` | 扫描全部组件的 `<style lang="scss">`：硬编码色值（第五节禁止）、缺主题兜底块、以及基线白名单是否失效 |
 | `npm run check:rules` | 执行第二节红线与第四节写法约定里可静态判定的几条：`v-html`、`<script setup>`、Vue2 的 `model:` 选项、跨 uni_modules import、用了 `$emit` 却没声明 `emits`、缺首块 JSDoc、`.npmrc` 是否被 git 跟踪或被忽略 |
+| `npm run check:release` | `release.js` 第 0 步发布前置检查的自检：注入假环境跑一遍四类拦截（凭证不可用 / registry 已有该版本 / 本地 tag 已存在 / `.npmrc` 未被忽略），外加三条结构锁（`preflight` 必须在任何写入之前被调用、旧的「只看 `.npmrc` 文件是否存在」判据不得复活） |
 | `npm run check:template` | 仅模板作用域（`check:all` 已含，留作单独排查） |
 
 - 入口 / 类型声明这两条尤其重要：`index.js` 与 `types/index.d.ts` 都是**发布时由 `scripts/gen-package.py` 重新生成**的，生成脚本出问题时，`check` 的覆盖性校验照样全绿（组件都在），但使用方 import 本包会直接编译报错。
@@ -197,6 +198,8 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 - `check:rules` 补齐的是**「写在文档里、没人执行」**那一类规则：第二节 6 条红线里此前只有 4 条有检查，第四节 5 条写法约定一条都没有。它们违反时的共同点是**不会有任何报错**：`v-html` 让组件在小程序端整块不渲染（那边只是空白）、Vue2 的 `model` 选项让 `v-model` 完全失效、缺 `emits` 让事件触发两次、`.npmrc` 进仓库等于把 npm token 明文公开。该脚本的所有文本判定都**先剥注释再扫**（`vui-markdown` 的 JSDoc 里写着「不使用 v-html」、`vui-form` 有一个名为 `model` 的 prop——直接 grep 会把这两个最守规矩的地方报成违规），并且输出「扫描面自证」一行（script / template 块各取到几个、多少组件用到 `$emit`、多少组件 JSDoc 齐备），避免哪天解析失灵导致规则**在空集上全绿**。
 
 环境里没有 HBuilderX 时无法真机/H5 实跑，因此**必须**用上述静态校验替代，并在提交信息里说明未做实跑验证。
+
+`check:release` 补的是**发布链自身**的盲区：`check:all` 里的其余八条都在看「要发出去的东西对不对」，没有一条看「这台机器现在发不发得出去」。而 `release.js` 的第 3~5 步（改版本号 → commit + tag → push）**不可回退**，tag 一推版本号就被占住。此前第 0 步只判断 `.npmrc` 文件**存不存在**——「文件存在」与「凭证可用」是两件事，一个只写了 registry 换源配置的 `~/.npmrc` 就能骗过它，于是脚本走完 bump → commit → tag → push 才倒在 `npm publish`，留下第一节明令禁止的「版本已升、包没发」，而且下次再跑会跳到下一个版本号。第 0 步因此改为实探（`npm whoami` + 目标版本是否已被 registry 占用 + 本地 tag 是否已存在），改法见 `scripts/release-preflight.js`，自检见 `scripts/check-release.js`。自检里的用案例「只有 registry 配置的 `~/.npmrc`」就是为这个漏洞写的：它必须红。
 
 ---
 

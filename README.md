@@ -377,6 +377,7 @@ npm run release -- major   # 删除或重命名 props、改变默认行为
 
 | 步骤 | 动作 |
 | --- | --- |
+| 0 | 发布前置检查：`npm whoami` 是否真的可用、目标版本在 registry 上有没有被占用、本地 tag 是否已存在、`.npmrc` 是否被 gitignore 忽略 |
 | 1 | 跑 `npm run check:all` 校验（校验链的唯一来源，见 `AGENTS.md` 第八节） |
 | 2 | 重新生成 `index.js`、`types/index.d.ts`、`docs/API.md`、`README.md` |
 | 3 | 提升 `package.json` 与各组件 `package.json` 的版本号 |
@@ -384,6 +385,8 @@ npm run release -- major   # 删除或重命名 props、改变默认行为
 | 5 | 推送分支与 tag 到远端 |
 | 6 | `npm publish --access public` |
 | 7 | 回查 registry 确认已上线 |
+
+第 0 步必须在最前面：第 3~7 步里 bump / commit / tag / push 都不可回退，tag 一推版本号就被占住了。所以「发布一定会失败」的原因要在任何写入之前查完，否则会留下 AGENTS.md 第一节明令禁止的「版本已升、tag 已推、包没发」。判据与自检分别见 `scripts/release-preflight.js` 与 `scripts/check-release.js`（`check:all` 会跑）。
 
 加 `--dry-run` 可只跑校验与产物生成、不写入任何内容：
 
@@ -409,6 +412,12 @@ npm run release -- minor --dry-run
 ```
 
 `.npmrc` 已在 `.gitignore` 中，**不会被提交**。token 格式必须以 `npm_` 开头。
+
+也可以用机器级的凭证（`npm login` 写入的 `~/.npmrc`）。发布前 `npm run release` 会先实探一次
+凭证是否真的可用（`npm whoami`），**不只看 `.npmrc` 文件在不在** —— 一个只写了 registry
+换源配置、没有 token 的 `~/.npmrc` 会让「文件存在」的判断通过，然后一路走完
+bump → commit → tag → push，最后才倒在 `npm publish`，把仓库留在半发布状态。
+凭证不可用时，脚本会在**任何写入之前**中止，并给出唯一要做的那个动作。
 
 ## 贡献指南
 
