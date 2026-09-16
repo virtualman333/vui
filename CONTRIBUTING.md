@@ -42,7 +42,7 @@ uni_modules/vui-xxx/
 - Vue 3 选项式 API（`<script>`，不用 `<script setup>`）
 - `v-model` 用 `modelValue` / `update:modelValue`
 - `<script>` 首块 JSDoc 必填，`@property` / `@event` 会生成到类型声明与 API 文档
-- 样式中的颜色一律引用 `$vui-*` 变量，不要硬编码
+- 样式中的颜色一律引用 `$vui-*` 变量，不要硬编码（`npm run check:theme` 会拦下硬编码色值）
 - 不要在模板里引用模块级常量（Vue 3 模板作用域访问不到）
 
 ### 3. 新增组件的额外步骤
@@ -61,7 +61,7 @@ npm run check:all   # 校验链的唯一来源，见 AGENTS.md 第八节
 npm run check:pack  # 单看用户实际拿到的 tarball（check:all 已含）
 ```
 
-两项都必须通过。`check:all` 内部由 `check` / `check:sfc` / `check:entry` / `check:types` / `check:gen` / `check:pack` 组成，
+两项都必须通过。`check:all` 内部由 `check` / `check:sfc` / `check:theme` / `check:entry` / `check:types` / `check:gen` / `check:pack` 组成，
 单独排查时可分别执行；清单只在 `package.json` 与 `AGENTS.md` 第八节维护，别在别处再抄一份。
 
 ### 5. 发布
