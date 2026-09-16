@@ -46,6 +46,34 @@
 				</scroll-view>
 			</view>
 
+			<!-- 表格（外层横向滚动：窄屏上宽表不该把整页撑破） -->
+			<view v-else-if="block.type === 'table'" class="vui-markdown__table">
+				<scroll-view class="vui-markdown__table-scroll" scroll-x>
+					<view class="vui-markdown__table-inner">
+						<view class="vui-markdown__tr vui-markdown__tr--head">
+							<view
+								v-for="(cell, ci) in block.header"
+								:key="ci"
+								class="vui-markdown__th"
+								:style="cellStyle(block, ci)"
+							>
+								<text v-for="(seg, si) in cell.segments" :key="si" :class="segClass(seg)">{{ seg.text }}</text>
+							</view>
+						</view>
+						<view v-for="(row, ri) in block.rows" :key="ri" class="vui-markdown__tr">
+							<view
+								v-for="(cell, ci) in row"
+								:key="ci"
+								class="vui-markdown__td"
+								:style="cellStyle(block, ci)"
+							>
+								<text v-for="(seg, si) in cell.segments" :key="si" :class="segClass(seg)">{{ seg.text }}</text>
+							</view>
+						</view>
+					</view>
+				</scroll-view>
+			</view>
+
 			<!-- 分隔线 -->
 			<view v-else-if="block.type === 'hr'" class="vui-markdown__hr"></view>
 		</view>
@@ -55,7 +83,7 @@
 <script>
 /**
  * 轻量 Markdown 渲染
- * @description 渲染常用 Markdown 语法（标题/段落/列表/引用/代码块/分隔线 + 粗体/斜体/行内代码）。
+ * @description 渲染常用 Markdown 语法（标题/段落/列表/引用/代码块/表格/分隔线 + 粗体/斜体/行内代码）。
  * 不使用 v-html，全部通过结构化节点渲染，因此在小程序端同样可用。
  * @property {String} content Markdown 源文本
  * @property {Boolean} selectable 文字是否可选中
@@ -104,6 +132,13 @@ export default {
 						items.push({ segments: this.parseInline(b.items[j]) });
 					}
 					out.push({ type: 'list', ordered: b.ordered, items });
+				} else if (b.type === 'table') {
+					out.push({
+						type: 'table',
+						align: b.align,
+						header: this.tableCells(b.header),
+						rows: b.rows.map((row) => this.tableCells(row))
+					});
 				} else {
 					out.push(b);
 				}
@@ -154,6 +189,25 @@ export default {
 					i++;
 					blocks.push({ type: 'code', lang, text: buf.join('\n') });
 					continue;
+				}
+
+				/* 表格：表头行 + 分隔行（| --- | :--: |）。两者必须紧邻，否则当普通段落 */
+				if (i + 1 < lines.length) {
+					const align = this.tableAlign(line, lines[i + 1]);
+					if (align) {
+						flush();
+						const header = this.splitTableRow(line);
+						i += 2;
+						const rows = [];
+						while (i < lines.length) {
+							const cells = this.splitTableRow(lines[i]);
+							if (!cells) break;
+							rows.push(this.fitTableRow(cells, header.length));
+							i++;
+						}
+						blocks.push({ type: 'table', align, header: this.fitTableRow(header, align.length), rows });
+						continue;
+					}
 				}
 
 				/* 标题 */
@@ -247,6 +301,88 @@ export default {
 			if (seg.type === 'italic') return 'vui-markdown__italic';
 			if (seg.type === 'code') return 'vui-markdown__code-inline';
 			return '';
+		},
+		/**
+		 * 表格行 → 单元格文本数组；不是表格行时返回 null。
+		 *
+		 * 刻意**要求以 `|` 开头**：普通文本里的单个竖线（`A | B`）不该被当成表格，
+		 * 而模型输出的表格几乎都带首尾竖线。尾竖线可省（`| a | b` 也认）。
+		 * `\|` 是转义，不当分隔符。
+		 */
+		splitTableRow(line) {
+			const src = line === null || line === undefined ? '' : String(line);
+			const trimmed = src.replace(/^\s+|\s+$/g, '');
+			if (trimmed.charAt(0) !== '|') return null;
+			if (trimmed.indexOf('|', 1) === -1) return null;
+			let body = trimmed.replace(/^\|/, '');
+			if (body.charAt(body.length - 1) === '|' && body.charAt(body.length - 2) !== '\\') {
+				body = body.slice(0, -1);
+			}
+			const cells = [];
+			let cur = '';
+			for (let k = 0; k < body.length; k++) {
+				const ch = body.charAt(k);
+				if (ch === '\\' && body.charAt(k + 1) === '|') {
+					cur += '|';
+					k++;
+					continue;
+				}
+				if (ch === '|') {
+					cells.push(cur.replace(/^\s+|\s+$/g, ''));
+					cur = '';
+					continue;
+				}
+				cur += ch;
+			}
+			cells.push(cur.replace(/^\s+|\s+$/g, ''));
+			return cells;
+		},
+		/** 单元格补齐 / 截断到 n 列，避免列数不齐时整张表错位 */
+		fitTableRow(cells, n) {
+			const out = [];
+			const src = cells || [];
+			for (let k = 0; k < n; k++) {
+				out.push(k < src.length ? src[k] : '');
+			}
+			return out;
+		},
+		/**
+		 * 「表头 + 分隔行」→ 对齐数组（left / center / right）；不是表格时返回 null。
+		 * 列数以**表头**为准（用户看到的就是这一行），分隔行多出的列忽略、缺少的按左对齐。
+		 */
+		tableAlign(headerLine, sepLine) {
+			const header = this.splitTableRow(headerLine);
+			if (!header || !header.length) return null;
+			const sep = this.splitTableRow(sepLine);
+			if (!sep || !sep.length) return null;
+			const align = [];
+			for (let k = 0; k < sep.length; k++) {
+				const cell = sep[k];
+				if (!/^:?-+:?$/.test(cell)) return null;
+				const left = cell.charAt(0) === ':';
+				const right = cell.charAt(cell.length - 1) === ':';
+				align.push(left && right ? 'center' : right ? 'right' : 'left');
+			}
+			const out = [];
+			for (let k = 0; k < header.length; k++) {
+				out.push(align[k] || 'left');
+			}
+			return out;
+		},
+		/** 单元格走与段落同一套行内解析（粗体 / 斜体 / 行内代码） */
+		tableCells(texts) {
+			const out = [];
+			const src = texts || [];
+			for (let k = 0; k < src.length; k++) {
+				out.push({ text: src[k], segments: this.parseInline(src[k]) });
+			}
+			return out;
+		},
+		/** 单元格对齐方式（分隔行里的 `:--` / `:-:` / `--:`）；左对齐不写 inline style */
+		cellStyle(block, ci) {
+			const align = (block && block.align) || [];
+			const v = align[ci];
+			return v && v !== 'left' ? 'text-align:' + v + ';' : '';
 		},
 		onCopy(text, index) {
 			if (!text) return;
@@ -458,6 +594,57 @@ $vui-code-color: #abb2bf !default;
 		height: 1px;
 		margin: 20rpx 0;
 		background-color: $vui-border-color-light;
+	}
+
+	/* 表格：外层 scroll-x 承担超宽，内层表格按内容撑开（inlne-flex 才能比容器宽） */
+	&__table {
+		margin: 16rpx 0;
+	}
+
+	&__table-scroll {
+		width: 100%;
+	}
+
+	&__table-inner {
+		display: inline-flex;
+		flex-direction: column;
+		min-width: 100%;
+		border: 1px solid $vui-border-color-light;
+		border-radius: 8rpx;
+		overflow: hidden;
+	}
+
+	&__tr {
+		display: flex;
+		flex-direction: row;
+		border-bottom: 1px solid $vui-border-color-light;
+
+		&:last-child {
+			border-bottom: 0;
+		}
+	}
+
+	&__tr--head {
+		background-color: $vui-fill-color-light;
+	}
+
+	&__th,
+	&__td {
+		flex: 1;
+		min-width: 0;
+		padding: 12rpx 16rpx;
+		font-size: 26rpx;
+		line-height: 1.6;
+		word-break: break-all;
+	}
+
+	&__th {
+		font-weight: 600;
+		color: $vui-text-color;
+	}
+
+	&__td {
+		color: $vui-text-color-regular;
 	}
 }
 </style>

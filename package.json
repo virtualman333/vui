@@ -66,7 +66,7 @@
   "scripts": {
     "release": "node scripts/release.js",
     "check": "npm run check:all",
-    "check:all": "node scripts/prepublish-check.js && node scripts/check-sfc.js && node scripts/check-theme.js && node scripts/check-rules.js && node scripts/check-entry.js && node scripts/check-types.js && node scripts/check-gen.js && node scripts/check-pack.js && node scripts/check-release.js && node scripts/check-components.js",
+    "check:all": "node scripts/prepublish-check.js && node scripts/check-sfc.js && node scripts/check-theme.js && node scripts/check-rules.js && node scripts/check-entry.js && node scripts/check-types.js && node scripts/check-gen.js && node scripts/check-pack.js && node scripts/check-release.js && node scripts/check-components.js && node scripts/check-markdown.js",
     "check:template": "node scripts/check-template-refs.js",
     "check:sfc": "node scripts/check-sfc.js",
     "check:theme": "node scripts/check-theme.js",
@@ -77,6 +77,7 @@
     "check:pack": "node scripts/check-pack.js",
     "check:release": "node scripts/check-release.js",
     "check:components": "node scripts/check-components.js",
+    "check:markdown": "node scripts/check-markdown.js",
     "theme:inject": "python scripts/inject-theme.py",
     "gen": "python scripts/gen-package.py && python scripts/gen-docs.py",
     "prepublishOnly": "npm run check:all",
