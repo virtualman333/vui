@@ -58,10 +58,10 @@ python scripts/inject-theme.py
 
 ```bash
 npm run check:all   # 校验链的唯一来源，见 AGENTS.md 第八节
-npm run pack        # 核对打包内容与体积
+npm run check:pack  # 单看用户实际拿到的 tarball（check:all 已含）
 ```
 
-两项都必须通过。`check:all` 内部由 `check` / `check:sfc` / `check:entry` / `check:types` / `check:gen` 组成，
+两项都必须通过。`check:all` 内部由 `check` / `check:sfc` / `check:entry` / `check:types` / `check:gen` / `check:pack` 组成，
 单独排查时可分别执行；清单只在 `package.json` 与 `AGENTS.md` 第八节维护，别在别处再抄一份。
 
 ### 5. 发布
