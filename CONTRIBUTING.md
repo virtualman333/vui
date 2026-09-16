@@ -61,8 +61,11 @@ npm run check:all   # 校验链的唯一来源，见 AGENTS.md 第八节
 npm run check:pack  # 单看用户实际拿到的 tarball（check:all 已含）
 ```
 
-两项都必须通过。`check:all` 内部由 `check` / `check:sfc` / `check:theme` / `check:entry` / `check:types` / `check:gen` / `check:pack` 组成，
-单独排查时可分别执行；清单只在 `package.json` 与 `AGENTS.md` 第八节维护，别在别处再抄一份。
+两项都必须通过。`check:all` 由若干子检查组成，各自也可单独执行（`check:sfc` / `check:rules` / `check:gen` …），
+各条查什么见 `AGENTS.md` 第八节的表格。
+
+**清单的唯一来源是 `package.json` 里的 `check:all` 脚本**，别在文档里再抄一遍 —— 这句话下面原本就抄了一份，
+结果每加一条检查它就少一条（2026-09 新增 `check:rules` 时就是这么发现的）。
 
 ### 5. 发布
 

@@ -66,10 +66,11 @@
   "scripts": {
     "release": "node scripts/release.js",
     "check": "npm run check:all",
-    "check:all": "node scripts/prepublish-check.js && node scripts/check-sfc.js && node scripts/check-theme.js && node scripts/check-entry.js && node scripts/check-types.js && node scripts/check-gen.js && node scripts/check-pack.js",
+    "check:all": "node scripts/prepublish-check.js && node scripts/check-sfc.js && node scripts/check-theme.js && node scripts/check-rules.js && node scripts/check-entry.js && node scripts/check-types.js && node scripts/check-gen.js && node scripts/check-pack.js",
     "check:template": "node scripts/check-template-refs.js",
     "check:sfc": "node scripts/check-sfc.js",
     "check:theme": "node scripts/check-theme.js",
+    "check:rules": "node scripts/check-rules.js",
     "check:entry": "node scripts/check-entry.js",
     "check:types": "node scripts/check-types.js",
     "check:gen": "node scripts/check-gen.js",

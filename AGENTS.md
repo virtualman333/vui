@@ -42,6 +42,10 @@ npm run release -- major    # 删除或重命名 props / 改变默认行为
 5. **禁止跳过校验直接发布**：`prepublishOnly` 钩子失败即中止，不要用 `--no-verify` 之类手段绕过。
 6. **禁止用 `v-html` 渲染内容**：小程序端不支持，必须用结构化节点渲染。
 
+**红线由检查执行，不靠记性**：发布前 `npm run check:all` 会拦住其中可自动判定的几条 ——
+§2.1 → `check:gen`、§2.2 与 §2.6 → `check:rules`、§2.3 → `prepublish-check`、§2.4 → `check:template`
+（§2.5 由 `prepublishOnly` 钩子本身保证）。
+
 ---
 
 ## 三、组件目录规范（必须严格一致）
@@ -88,6 +92,9 @@ uni_modules/vui-xxx/
   首个非 `@` 行会作为组件描述，`@property` / `@event` 会生成到 `types/index.d.ts` 与 `docs/API.md`。
 - **显式声明 `emits`**，避免自定义事件与原生事件双触发。
 - 组件内**不允许 import 其他 uni_modules 的组件**（npm 安装后路径不稳定），需要复用就写进组件自身。
+
+本节可自动判定的五条 —— 「不得 `<script setup>`」「v-model 必须 `modelValue`」「用了 `$emit` 必须声明 `emits`」
+「首块 JSDoc 必须存在」「不得 import 其它 uni_modules 组件」—— 由 `npm run check:rules` 执行（已并入 `check:all`）。
 
 ---
 
@@ -180,12 +187,14 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 | `npm run check:gen` | 在临时副本里重新跑生成器，与已提交产物逐文件比对；并校验 `uni_modules/` 组件集合与 `gen-docs.py` 的 `CATEGORY` 双向一致 |
 | `npm run check:pack` | 取 `npm pack --dry-run --json` 的**真实**打包清单：必需文件是否都在、48 个组件的四件套是否齐全、演示页/脚本/工程文件是否误入包、体积是否超标 |
 | `npm run check:theme` | 扫描全部组件的 `<style lang="scss">`：硬编码色值（第五节禁止）、缺主题兜底块、以及基线白名单是否失效 |
+| `npm run check:rules` | 执行第二节红线与第四节写法约定里可静态判定的几条：`v-html`、`<script setup>`、Vue2 的 `model:` 选项、跨 uni_modules import、用了 `$emit` 却没声明 `emits`、缺首块 JSDoc、`.npmrc` 是否被 git 跟踪或被忽略 |
 | `npm run check:template` | 仅模板作用域（`check:all` 已含，留作单独排查） |
 
 - 入口 / 类型声明这两条尤其重要：`index.js` 与 `types/index.d.ts` 都是**发布时由 `scripts/gen-package.py` 重新生成**的，生成脚本出问题时，`check` 的覆盖性校验照样全绿（组件都在），但使用方 import 本包会直接编译报错。
 - `check:gen` 补的是上面几条共同的盲区：它们查的都是「产物**自身**是否合法」，没有一条查「产物是否还**反映源码**」。改了组件没跑 `npm run gen` 时，旧产物照样合法；而新组件漏登记 `CATEGORY` 时，重新生成的结果与已提交产物**完全一致**（都缺它），只有组件集合比对能发现 —— 这两种情况都真实发生过。
 - `check:pack` 补的是另一层盲区：上面所有检查查的都是**仓库里的文件**，而用户 `npm i` 拿到的是 **tarball**。`files` 字段少写一项（漏 `types/`）时产物全部合法、前面几条全绿，使用方的 TS 却直接找不到声明；`files` 被写成宽匹配时演示页与开发脚本一起进包。这一条是链上唯一盯着「用户真正装到手里的东西」的检查。
 - `check:theme` 盯的是**换肤能力**这条产品底线（第五节）：颜色一旦硬编码，组件就永久脱离主题层，换肤时它不变，而且**没有任何报错**。这条规则此前只写在文档里、没人执行 —— 一次手工「统一主题变量」之后，仍有 13 处硬编码散在 8 个组件里（其中 `#f2f3f5` 在 5 个组件里各复制了一遍，而主题层早就定义了同名变量）。该检查同时校验「每个组件都有主题兜底块」，漏跑 `inject-theme.py` 的新组件会被拦下。
+- `check:rules` 补齐的是**「写在文档里、没人执行」**那一类规则：第二节 6 条红线里此前只有 4 条有检查，第四节 5 条写法约定一条都没有。它们违反时的共同点是**不会有任何报错**：`v-html` 让组件在小程序端整块不渲染（那边只是空白）、Vue2 的 `model` 选项让 `v-model` 完全失效、缺 `emits` 让事件触发两次、`.npmrc` 进仓库等于把 npm token 明文公开。该脚本的所有文本判定都**先剥注释再扫**（`vui-markdown` 的 JSDoc 里写着「不使用 v-html」、`vui-form` 有一个名为 `model` 的 prop——直接 grep 会把这两个最守规矩的地方报成违规），并且输出「扫描面自证」一行（script / template 块各取到几个、多少组件用到 `$emit`、多少组件 JSDoc 齐备），避免哪天解析失灵导致规则**在空集上全绿**。
 
 环境里没有 HBuilderX 时无法真机/H5 实跑，因此**必须**用上述静态校验替代，并在提交信息里说明未做实跑验证。
 
