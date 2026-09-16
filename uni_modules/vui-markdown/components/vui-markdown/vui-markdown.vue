@@ -287,6 +287,7 @@ $vui-text-color: #333 !default;
 $vui-text-color-regular: #606266 !default;
 $vui-text-color-secondary: #909399 !default;
 $vui-text-color-placeholder: #c0c4cc !default;
+$vui-text-color-disabled: #e4e7ed !default;
 $vui-text-color-inverse: #fff !default;
 /* 边框色 */
 $vui-border-color: #dcdfe6 !default;
@@ -302,6 +303,9 @@ $vui-track-color: #ebedf0 !default;
 $vui-active-bg-color: #f5f9ff !default;
 $vui-gray-color: #ccc !default;
 $vui-white: #fff !default;
+/* 代码块（深色底 + 配套前景）—— vui-code / vui-markdown 共用 */
+$vui-code-bg: #282c34 !default;
+$vui-code-color: #abb2bf !default;
 /* ===== VUI 主题变量结束 ===== */
 .vui-markdown {
 	width: 100%;
@@ -409,7 +413,7 @@ $vui-white: #fff !default;
 		margin: 16rpx 0;
 		overflow: hidden;
 		border-radius: 12rpx;
-		background-color: #282c34;
+		background-color: $vui-code-bg;
 	}
 
 	&__code-head {
@@ -445,7 +449,7 @@ $vui-white: #fff !default;
 		font-family: Consolas, Monaco, Menlo, monospace;
 		font-size: 24rpx;
 		line-height: 1.7;
-		color: #abb2bf;
+		color: $vui-code-color;
 		white-space: pre-wrap;
 		word-break: break-all;
 	}

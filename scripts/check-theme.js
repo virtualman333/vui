@@ -25,11 +25,16 @@
  *
  * 历史遗留基线
  * ------------
- * 首次建立本检查时，48 个组件里仍有若干处硬编码色值（见 BASELINE）。它们属于
- * 「用户可见」的改动，必须随版本一起发（AGENTS.md 第一节），因此不在建立检查的
- * 同一轮里顺手改掉。BASELINE 是**只减不增**的棘轮：
+ * 首次建立本检查时，48 个组件里仍有 12 处硬编码色值。它们属于「用户可见」的改动，
+ * 必须随版本一起发（AGENTS.md 第一节），因此不在建立检查的同一轮里顺手改掉。
+ * BASELINE 是**只减不增**的棘轮：
  *  - 新增硬编码 → 失败；
  *  - 把基线里的某处改好了却忘记删条目 → 也失败（提示删除），保证白名单不会烂掉。
+ *
+ * **2026-09-17：棘轮已归零。** 那 12 处已全部改走主题变量（并为其中 3 处补了
+ * 主题层缺失的变量：`$vui-text-color-disabled` / `$vui-code-bg` / `$vui-code-color`），
+ * 因此 BASELINE 现在是空对象。空基线 = 这个文件从今往后是**硬闸门**：
+ * 任何新出现的硬编码色值都会直接让 `npm run check:all` 失败，没有豁免通道。
  *
  * 用法：
  *   npm run check:theme
@@ -45,28 +50,12 @@ const MODULES = path.join(root, 'uni_modules');
 /**
  * 历史遗留基线：`组件名|小写字面量` → 处置说明。
  * **只减不增**。修掉一处就把对应条目删掉（留着会报「条目已失效」）。
+ *
+ * 2026-09-17 起为空：12 处历史硬编码已全部改走主题变量，棘轮归零。
+ * 空对象不是「关掉检查」——恰恰相反，它让下面那句 `BASELINE[key] ? 放行 : 失败`
+ * 变成无条件失败，也就是说从这里开始，任何新的硬编码都会被直接拦下。
  */
-const BASELINE = {
-  // 分隔线：主题层里本来就有同名变量（$vui-bg-color-hover: #f2f3f5 !default），
-  // 却在 5 个组件里各复制了一遍 —— 换肤时这 5 条分隔线不会跟着走。
-  'vui-calendar|#f2f3f5': '→ $vui-bg-color-hover',
-  'vui-card|#f2f3f5': '→ $vui-bg-color-hover',
-  'vui-collapse|#f2f3f5': '→ $vui-bg-color-hover',
-  'vui-drawer|#f2f3f5': '→ $vui-bg-color-hover',
-  'vui-select|#f2f3f5': '→ $vui-bg-color-hover',
-  // 下面两处是同样的「主题层已有同名值」：$vui-text-color-placeholder 就是 #c0c4cc
-  'vui-scrollbar|#c0c4cc': '→ $vui-text-color-placeholder（值完全相同）',
-  // 记录中的红色遮罩：$vui-error 就是 #e43d33，应写 rgba($vui-error, .9)
-  'vui-voice-input|rgba(228,61,51,0.9)': '→ rgba($vui-error, .9)',
-  // 日历的辅助文字：主题层没有等值变量，需先补一条（如 $vui-text-color-disabled）
-  'vui-calendar|#e4e7ed': '→ 需新增文本辅助色变量',
-  // 代码块配色（深色底 + 配套前景），vui-code 与 vui-markdown 各写了一份，逐字相同 ——
-  // 典型的两处实现，应抽成 $vui-code-bg / $vui-code-color 两个变量
-  'vui-code|#282c34': '→ 新增 $vui-code-bg',
-  'vui-code|#abb2bf': '→ 新增 $vui-code-color',
-  'vui-markdown|#282c34': '→ 新增 $vui-code-bg',
-  'vui-markdown|#abb2bf': '→ 新增 $vui-code-color',
-};
+const BASELINE = {};
 
 /** `inject-theme.py` 注入的兜底块：整段排除（变量定义本身就是色值） */
 const THEME_BLOCK_RE =
@@ -136,6 +125,27 @@ function scssBlocks(raw) {
   return out;
 }
 
+/**
+ * 主题变量清单的**唯一来源**：`scripts/inject-theme.py` 的 THEME_BLOCK。
+ * 这里只取变量名（正则扫 `$vui-xxx:`），不比对文本形状 —— 要求的是
+ * 「每个组件能引用的变量集合 = 主题层提供的变量集合」，不是格式一致。
+ */
+const THEME_SOURCE = path.join(__dirname, 'inject-theme.py');
+const EXPECTED_VARS = (() => {
+  const src = fs.readFileSync(THEME_SOURCE, 'utf8');
+  const m = /THEME_BLOCK\s*=\s*"""([\s\S]*?)"""/.exec(src);
+  if (!m) return null;
+  const names = [...m[1].matchAll(/\$vui-[a-z0-9-]+(?=\s*:)/g)].map((x) => x[0]);
+  return new Set(names);
+})();
+
+/** 从一个样式块里取出兜底块声明的变量名 */
+function themeVarsIn(body) {
+  const m = THEME_BLOCK_RE.exec(body);
+  if (!m) return null;
+  return new Set([...m[0].matchAll(/\$vui-[a-z0-9-]+(?=\s*:)/g)].map((x) => x[0]));
+}
+
 /** 扫描单个文件，返回 { violations: [{line, text, literal, key}], exempt, missingTheme } */
 function scanFile(file) {
   const raw = fs.readFileSync(file, 'utf8');
@@ -144,6 +154,7 @@ function scanFile(file) {
   const blocks = scssBlocks(raw);
   const missingTheme =
     blocks.length > 0 && !blocks.some((b) => THEME_MARK_RE.test(b.content));
+  const themeVars = themeVarsIn(blocks.map((b) => b.content).join('\n'));
 
   // 只保留 scss 样式块的内容，块外一律空白；再剥注释、排除主题兜底块
   let masked = blank(raw);
@@ -169,12 +180,20 @@ function scanFile(file) {
   while ((m = HEX_RE.exec(masked))) add(m.index, m[1]);
 
   let exempt = 0;
+  let derived = 0;
   FUNC_RE.lastIndex = 0;
   while ((m = FUNC_RE.exec(masked))) {
-    const nums = m[2]
+    const args = m[2]
       .split(',')
-      .slice(0, 3)
-      .map((x) => Number(String(x).replace(/%/g, '').trim()));
+      .slice(0, 3);
+    // 变量派生的色值（如 rgba($vui-error, .9)）本身就是「走了主题变量」，
+    // 不是硬编码。此前这类写法会被误判成违规（第一个通道解析出 NaN → 判定为非中性），
+    // 于是「把硬编码改成变量」反而会让校验变红 —— 那会把人逼回硬编码。
+    if (args.some((x) => x.includes('$'))) {
+      derived++;
+      continue;
+    }
+    const nums = args.map((x) => Number(String(x).replace(/%/g, '').trim()));
     const neutral =
       nums.length === 3 && nums.every((n) => Number.isFinite(n)) && nums[0] === nums[1] && nums[1] === nums[2];
     if (neutral) exempt++;
@@ -192,7 +211,7 @@ function scanFile(file) {
     if (nm) add(valueStart + nm.index, nm[0]);
   }
 
-  return { violations, exempt, missingTheme, blocks: blocks.length };
+  return { violations, exempt, derived, missingTheme, themeVars, blocks: blocks.length };
 }
 
 console.log('\n[vui-uniapp] 主题变量校验');
@@ -206,8 +225,11 @@ const components = componentIds();
 
 const all = [];
 let exemptTotal = 0;
+let derivedTotal = 0;
 let blockTotal = 0;
 const noTheme = [];
+/** 兜底块变量清单与主题层不一致的组件：[组件, 缺的变量, 多的变量] */
+const varDrift = [];
 
 for (const c of components) {
   const dir = path.join(MODULES, c, 'components', c);
@@ -221,8 +243,16 @@ for (const c of components) {
     const r = scanFile(file);
     blockTotal += r.blocks;
     exemptTotal += r.exempt;
+    derivedTotal += r.derived;
     if (r.missingTheme) noTheme.push(c);
     for (const v of r.violations) all.push({ ...v, file: c });
+
+    // 兜底块变量清单 == 主题层清单（inject-theme.py 的 THEME_BLOCK）
+    if (EXPECTED_VARS && r.themeVars) {
+      const missing = [...EXPECTED_VARS].filter((v) => !r.themeVars.has(v));
+      const extra = [...r.themeVars].filter((v) => !EXPECTED_VARS.has(v));
+      if (missing.length || extra.length) varDrift.push({ c, missing, extra });
+    }
   }
 }
 
@@ -230,6 +260,19 @@ console.log(`  组件: ${components.length}   scss 样式块: ${blockTotal}`);
 console.log(
   `  豁免的中性遮罩/阴影: ${exemptTotal} 处（R=G=B，视觉层次而非主题色，AGENTS.md 第五节明确不变量化）`
 );
+console.log(`  变量派生的色值: ${derivedTotal} 处（如 rgba($vui-error, .9)，本就是走主题变量）`);
+if (EXPECTED_VARS) {
+  console.log(
+    `  兜底块变量清单: 与主题层一致（${EXPECTED_VARS.size} 个变量，来源 scripts/inject-theme.py）`
+  );
+} else {
+  // 解析不出来 = 这条检查**没有生效**。让它直接失败，而不是打一行警告继续 ——
+  // 「检查自己静默消失了」正是本仓最贵的一类回归（prepublish-check 曾一边打印 48
+  // 一边打印 49 却照样说「校验通过」）。
+  console.log('\n  x 没能从 scripts/inject-theme.py 解析出 THEME_BLOCK —— 变量清单一致性检查无法生效');
+  console.log('    该块是主题变量清单的唯一来源；改了它的写法请同步本文件的正则。');
+  process.exit(1);
+}
 
 // 基线核对：条目必须仍然命中，否则说明该处已修好却没删条目（白名单会烂掉）
 const hit = new Set();
@@ -271,7 +314,23 @@ if (stale.length) {
   console.log('    删除位置：scripts/check-theme.js 的 BASELINE');
 }
 
-if (fresh.length || noTheme.length || stale.length) {
+if (varDrift.length) {
+  console.log(
+    `\n  x ${varDrift.length} 个组件的兜底块变量清单与主题层（scripts/inject-theme.py 的 THEME_BLOCK）不一致：`
+  );
+  for (const d of varDrift) {
+    const bits = [];
+    if (d.missing.length) bits.push(`缺 ${d.missing.join(' ')}`);
+    if (d.extra.length) bits.push(`多 ${d.extra.join(' ')}`);
+    console.log(`      ${d.c}: ${bits.join('；')}`);
+  }
+  console.log('\n    为什么必须一致：组件引用一个自己兜底块里没有的变量时，单独编译该组件的');
+  console.log('    样式（npm run check:sfc 就是这么做的）会直接报 Undefined variable；而');
+  console.log('    inject-theme.py 旧版是「只注入不更新」，新加的变量永远进不了老组件。');
+  console.log('    修法：python scripts/inject-theme.py');
+}
+
+if (fresh.length || noTheme.length || stale.length || varDrift.length) {
   console.log('\n主题变量校验未通过。\n');
   process.exit(1);
 }

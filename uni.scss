@@ -101,6 +101,7 @@ $vui-text-color: #333;
 $vui-text-color-regular: #606266;
 $vui-text-color-secondary: #909399;
 $vui-text-color-placeholder: #c0c4cc;
+$vui-text-color-disabled: #e4e7ed; // 禁用态文字（比 placeholder 更淡）
 $vui-text-color-inverse: #fff;
 
 /* 边框色 */
@@ -118,3 +119,7 @@ $vui-track-color: #ebedf0; // 进度条 / 滑块轨道底色
 $vui-active-bg-color: #f5f9ff; // 选中项背景
 $vui-gray-color: #ccc;
 $vui-white: #fff;
+
+/* 代码块（深色底 + 配套前景），vui-code 与 vui-markdown 共用同一对变量 */
+$vui-code-bg: #282c34;
+$vui-code-color: #abb2bf;

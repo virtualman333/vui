@@ -119,7 +119,7 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-/* ===== VUI 主题变量（兜底定义，可在项目 uni.scss 中覆盖） ===== */
+/* ===== VUI 主题变量（兼底定义，可在项目 uni.scss 中覆盖） ===== */
 /* 功能色 */
 $vui-primary: #2979ff !default;
 $vui-success: #18bc37 !default;
@@ -132,6 +132,7 @@ $vui-text-color: #333 !default;
 $vui-text-color-regular: #606266 !default;
 $vui-text-color-secondary: #909399 !default;
 $vui-text-color-placeholder: #c0c4cc !default;
+$vui-text-color-disabled: #e4e7ed !default;
 $vui-text-color-inverse: #fff !default;
 /* 边框色 */
 $vui-border-color: #dcdfe6 !default;
@@ -147,6 +148,9 @@ $vui-track-color: #ebedf0 !default;
 $vui-active-bg-color: #f5f9ff !default;
 $vui-gray-color: #ccc !default;
 $vui-white: #fff !default;
+/* 代码块（深色底 + 配套前景）—— vui-code / vui-markdown 共用 */
+$vui-code-bg: #282c34 !default;
+$vui-code-color: #abb2bf !default;
 /* ===== VUI 主题变量结束 ===== */
 .vui-message {
 	position: fixed;
