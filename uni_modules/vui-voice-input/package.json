@@ -1,7 +1,7 @@
 {
   "id": "vui-voice-input",
   "displayName": "vui-voice-input",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "VUI 语音输入组件",
   "keywords": [
     "vui-voice-input"

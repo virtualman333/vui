@@ -28,6 +28,7 @@
   - [Table 表格](#vui-table)
   - [Pagination 分页](#vui-pagination)
   - [Progress 进度条](#vui-progress)
+  - [Count To 数字滚动](#vui-count-to)
   - [Steps 步骤条](#vui-steps)
   - [Tabs 标签页](#vui-tabs)
   - [Collapse 折叠面板](#vui-collapse)
@@ -437,6 +438,32 @@
 | showText | `boolean` | `true` | 是否显示文字 |
 | textInside | `boolean` | `false` | 文字是否内显 |
 | format | `string` | `''` | 自定义文字，支持 {value} 占位 |
+
+### vui-count-to
+
+**Count To 数字滚动**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| start | `number` | `0` | 起始数值 |
+| end | `number` | `0` | 目标数值 |
+| duration | `number` | `1500` | 动画时长（毫秒），传 0 表示直接显示终值 |
+| decimals | `number` | `0` | 保留小数位数 |
+| separator | `string` | `''` | 千分位分隔符，如传 "," 则 1234567 显示为 1,234,567 |
+| prefix | `string` | `''` | 前缀，如 "¥" |
+| suffix | `string` | `''` | 后缀，如 " USDT" |
+| autoplay | `boolean` | `true` | 是否挂载后自动开始滚动 |
+| easing | `string` | `'easeOutCubic'` | 缓动函数 linear / easeOutQuad / easeOutCubic |
+| color | `string` | `''` | 文字颜色 |
+| fontSize | `any` | `''` | 字号，数字按 rpx 处理 |
+| bold | `boolean` | `false` | 是否加粗 |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `finish` | 滚动结束时触发，参数为终值 |
+| `click` | 点击时触发 |
 
 ### vui-steps
 

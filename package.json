@@ -1,7 +1,7 @@
 {
   "name": "vui-uniapp",
-  "version": "1.1.0",
-  "description": "Virtual UI (VUI) —— 基于 uni-app 的 Vue3 跨端组件库，47 个开箱即用的高质量组件，覆盖基础 / 表单 / 数据展示 / 反馈 / 媒体 / AI 场景，支持 iOS / Android / H5 / 各家小程序",
+  "version": "1.2.0",
+  "description": "Virtual UI (VUI) —— 基于 uni-app 的 Vue3 跨端组件库，48 个开箱即用的高质量组件，覆盖基础 / 表单 / 数据展示 / 反馈 / 媒体 / AI 场景，支持 iOS / Android / H5 / 各家小程序",
   "main": "index.js",
   "module": "index.js",
   "types": "types/index.d.ts",

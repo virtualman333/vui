@@ -17,7 +17,7 @@ CATEGORY = {
     '表单组件': ['vui-input', 'vui-radio', 'vui-checkbox', 'vui-switch', 'vui-select',
                  'vui-form', 'vui-form-item', 'vui-slider', 'vui-upload',
                  'vui-region-picker', 'vui-date-picker', 'vui-time-picker'],
-    '数据展示': ['vui-table', 'vui-pagination', 'vui-progress', 'vui-steps', 'vui-tabs',
+    '数据展示': ['vui-table', 'vui-pagination', 'vui-progress', 'vui-count-to', 'vui-steps', 'vui-tabs',
                  'vui-collapse', 'vui-calendar', 'vui-scrollbar', 'vui-auto-scroll'],
     '反馈组件': ['vui-message', 'vui-notification', 'vui-modal', 'vui-drawer',
                  'vui-loading', 'vui-tooltip', 'vui-popover', 'vui-backtop'],

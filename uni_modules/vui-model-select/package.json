@@ -1,7 +1,7 @@
 {
   "id": "vui-model-select",
   "displayName": "vui-model-select",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "VUI 模型选择组件",
   "keywords": [
     "vui-model-select"

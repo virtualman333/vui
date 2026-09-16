@@ -5,7 +5,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![uni-app](https://img.shields.io/badge/uni--app-Vue3-41b883.svg)](https://uniapp.dcloud.net.cn/)
 
-> 基于 uni-app 的 **Vue 3** 跨端组件库 —— 47 个开箱即用的组件，一套代码同时跑 iOS / Android / H5 / 微信小程序等各家小程序。
+> 基于 uni-app 的 **Vue 3** 跨端组件库 —— 48 个开箱即用的组件，一套代码同时跑 iOS / Android / H5 / 微信小程序等各家小程序。
 
 ## 目录
 
@@ -234,7 +234,7 @@ $vui-primary: #7166f0;
 
 ## 组件总览
 
-共 **47** 个组件、**286** 个属性、**72** 个事件。
+共 **48** 个组件、**298** 个属性、**74** 个事件。
 完整 API（属性 / 事件 / 插槽）见 [docs/API.md](docs/API.md)。
 
 ### 基础组件
@@ -272,6 +272,7 @@ $vui-primary: #7166f0;
 | `<vui-table>` | 表格 | easycom 自动 | `columns`, `data`, `border`, `stripe`, `emptyText` |
 | `<vui-pagination>` | 分页 | easycom 自动 | `modelValue`, `total`, `pageSize`, `pagerCount`, `showTotal` |
 | `<vui-progress>` | 进度条 | easycom 自动 | `percentage`, `strokeWidth`, `color`, `status`, `showText` |
+| `<vui-count-to>` | 数字滚动 | easycom 自动 | `start`, `end`, `duration`, `decimals`, `separator` |
 | `<vui-steps>` | 步骤条 | easycom 自动 | `items`, `modelValue`, `direction`, `color`, `size` |
 | `<vui-tabs>` | 标签页 | easycom 自动 | `items`, `modelValue`, `type`, `color`, `scrollable` |
 | `<vui-collapse>` | 折叠面板 | easycom 自动 | `items`, `modelValue`, `accordion`, `arrow` |

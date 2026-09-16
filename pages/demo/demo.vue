@@ -33,6 +33,36 @@
 			<vui-progress :percentage="90" status="error" :stroke-width="20" text-inside class="demo-gap"></vui-progress>
 		</vui-card>
 
+		<!-- CountTo 数字滚动 -->
+		<vui-card title="CountTo 数字滚动">
+			<view class="demo-row">
+				<vui-count-to :end="12888" separator="," prefix="¥" :font-size="48" bold></vui-count-to>
+			</view>
+			<view class="demo-row demo-gap">
+				<vui-count-to
+					:end="1234567.89"
+					:decimals="2"
+					separator=","
+					suffix=" USDT"
+					:duration="2000"
+					:font-size="32"
+				></vui-count-to>
+			</view>
+			<view class="demo-row demo-gap">
+				<vui-count-to
+					ref="countTo"
+					:end="98304"
+					separator=","
+					suffix=" tokens"
+					:font-size="28"
+					color="#7166F0"
+					@finish="onCountFinish"
+				></vui-count-to>
+				<vui-button type="primary" @click="replayCount">重播</vui-button>
+			</view>
+			<view class="demo-panel">{{ countTip }}</view>
+		</vui-card>
+
 		<!-- Steps 步骤条 -->
 		<vui-card title="Steps 步骤条">
 			<vui-steps :items="stepItems" v-model="stepCurrent"></vui-steps>
@@ -217,6 +247,7 @@ export default {
 				{ title: '步骤三', desc: '完成订单' }
 			],
 			stepCurrent: 1,
+			countTip: '',
 			tabItems: ['推荐', '热点', '视频'],
 			tabCurrent: 0,
 			page: 1,
@@ -297,6 +328,13 @@ export default {
 		},
 		resetForm() {
 			this.$refs.form.resetFields();
+		},
+		replayCount() {
+			this.countTip = '';
+			this.$refs.countTo.restart();
+		},
+		onCountFinish(value) {
+			this.countTip = '滚动结束，终值 ' + value;
 		}
 	}
 };

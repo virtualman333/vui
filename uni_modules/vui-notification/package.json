@@ -1,7 +1,7 @@
 {
   "id": "vui-notification",
   "displayName": "vui-notification",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "VUI 通知组件",
   "keywords": [
     "vui-notification"

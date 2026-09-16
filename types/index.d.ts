@@ -318,6 +318,44 @@ export interface VuiCopyEmits {
 
 export const VuiCopy: DefineComponent<VuiCopyProps>;
 
+/** CountTo 数字滚动 */
+export interface VuiCountToProps {
+	/** 起始数值 */
+	start?: number;
+	/** 目标数值 */
+	end?: number;
+	/** 动画时长（毫秒），传 0 表示直接显示终值 */
+	duration?: number;
+	/** 保留小数位数 */
+	decimals?: number;
+	/** 千分位分隔符，如传 "," 则 1234567 显示为 1,234,567 */
+	separator?: string;
+	/** 前缀，如 "¥" */
+	prefix?: string;
+	/** 后缀，如 " USDT" */
+	suffix?: string;
+	/** 是否挂载后自动开始滚动 */
+	autoplay?: boolean;
+	/** 缓动函数 linear / easeOutQuad / easeOutCubic */
+	easing?: string;
+	/** 文字颜色 */
+	color?: string;
+	/** 字号，数字按 rpx 处理 */
+	fontSize?: any;
+	/** 是否加粗 */
+	bold?: boolean;
+}
+
+/** CountTo 数字滚动 事件 */
+export interface VuiCountToEmits {
+	/** 滚动结束时触发，参数为终值 */
+	finish: (...args: any[]) => void;
+	/** 点击时触发 */
+	click: (...args: any[]) => void;
+}
+
+export const VuiCountTo: DefineComponent<VuiCountToProps>;
+
 /** DatePicker 日期选择器 */
 export interface VuiDatePickerProps {
 	/** 选中日期 YYYY-MM-DD，支持 v-model */
@@ -1243,6 +1281,8 @@ declare module 'vue' {
 		'vui-collapse': typeof VuiCollapse;
 		VuiCopy: typeof VuiCopy;
 		'vui-copy': typeof VuiCopy;
+		VuiCountTo: typeof VuiCountTo;
+		'vui-count-to': typeof VuiCountTo;
 		VuiDatePicker: typeof VuiDatePicker;
 		'vui-date-picker': typeof VuiDatePicker;
 		VuiDrawer: typeof VuiDrawer;

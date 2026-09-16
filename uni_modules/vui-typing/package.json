@@ -1,7 +1,7 @@
 {
   "id": "vui-typing",
   "displayName": "vui-typing",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "VUI 打字机流式文本组件",
   "keywords": [
     "vui-typing"

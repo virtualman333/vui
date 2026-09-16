@@ -1,10 +1,10 @@
 {
-  "id": "vui-slider",
-  "displayName": "vui-slider",
+  "id": "vui-count-to",
+  "displayName": "vui-count-to",
   "version": "1.2.0",
-  "description": "VUI 滑块组件",
+  "description": "VUI 数字滚动组件",
   "keywords": [
-    "vui-slider"
+    "vui-count-to"
   ],
   "repository": "",
   "engines": {

@@ -19,6 +19,7 @@ import VuiCheckbox from './uni_modules/vui-checkbox/components/vui-checkbox/vui-
 import VuiCode from './uni_modules/vui-code/components/vui-code/vui-code.vue'
 import VuiCollapse from './uni_modules/vui-collapse/components/vui-collapse/vui-collapse.vue'
 import VuiCopy from './uni_modules/vui-copy/components/vui-copy/vui-copy.vue'
+import VuiCountTo from './uni_modules/vui-count-to/components/vui-count-to/vui-count-to.vue'
 import VuiDatePicker from './uni_modules/vui-date-picker/components/vui-date-picker/vui-date-picker.vue'
 import VuiDrawer from './uni_modules/vui-drawer/components/vui-drawer/vui-drawer.vue'
 import VuiFeedback from './uni_modules/vui-feedback/components/vui-feedback/vui-feedback.vue'
@@ -68,6 +69,7 @@ const components = {
 	VuiCode,
 	VuiCollapse,
 	VuiCopy,
+	VuiCountTo,
 	VuiDatePicker,
 	VuiDrawer,
 	VuiFeedback,
@@ -137,6 +139,7 @@ export { default as VuiCheckbox } from './uni_modules/vui-checkbox/components/vu
 export { default as VuiCode } from './uni_modules/vui-code/components/vui-code/vui-code.vue';
 export { default as VuiCollapse } from './uni_modules/vui-collapse/components/vui-collapse/vui-collapse.vue';
 export { default as VuiCopy } from './uni_modules/vui-copy/components/vui-copy/vui-copy.vue';
+export { default as VuiCountTo } from './uni_modules/vui-count-to/components/vui-count-to/vui-count-to.vue';
 export { default as VuiDatePicker } from './uni_modules/vui-date-picker/components/vui-date-picker/vui-date-picker.vue';
 export { default as VuiDrawer } from './uni_modules/vui-drawer/components/vui-drawer/vui-drawer.vue';
 export { default as VuiFeedback } from './uni_modules/vui-feedback/components/vui-feedback/vui-feedback.vue';
