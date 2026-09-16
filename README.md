@@ -4,8 +4,11 @@
 [![npm downloads](https://img.shields.io/npm/dm/vui-uniapp.svg)](https://www.npmjs.com/package/vui-uniapp)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![uni-app](https://img.shields.io/badge/uni--app-Vue3-41b883.svg)](https://uniapp.dcloud.net.cn/)
+[![在线演示](https://img.shields.io/badge/demo-online-7166F0.svg)](https://virtualman333.github.io/vui/)
 
 > 基于 uni-app 的 **Vue 3** 跨端组件库 —— 48 个开箱即用的组件，一套代码同时跑 iOS / Android / H5 / 微信小程序等各家小程序。
+
+**在线演示**：[https://virtualman333.github.io/vui/](https://virtualman333.github.io/vui/) —— 含「组件总览」「AI 组件演示」「开发者测试」三个页面，桌面与手机浏览器直接打开即可，无需安装。
 
 ## 目录
 
