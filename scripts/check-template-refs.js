@@ -23,6 +23,8 @@
  */
 const fs = require('fs');
 const path = require('path');
+// `.vue` 枚举的唯一来源（本文件旧实现自己 walk 了一份）
+const { vueFiles } = require('./lib/components');
 
 const root = path.resolve(__dirname, '..');
 
@@ -97,24 +99,16 @@ function collectRefs(tpl) {
   return { refs, local };
 }
 
-function walkVueFiles(dir, out = []) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, entry.name);
-    if (entry.isDirectory()) walkVueFiles(p, out);
-    else if (entry.name.endsWith('.vue')) out.push(p);
-  }
-  return out;
-}
-
 function checkTemplateRefs(options = {}) {
   const quiet = !!options.quiet;
   const errors = [];
   const warns = [];
-  const base = path.join(root, 'uni_modules');
 
-  const vueFiles = fs.existsSync(base) ? walkVueFiles(base) : [];
+  // 枚举走 scripts/lib/components.js —— 它同时是 prepublish-check 里「组件数」的来源，
+  // 两处数字一致才有意义（旧实现各 walk 一次，能同时打印 48 与 49）
+  const vueFilesList = vueFiles();
 
-  for (const file of vueFiles) {
+  for (const file of vueFilesList) {
     const src = fs.readFileSync(file, 'utf8');
     const tm = src.match(/<template>([\s\S]*?)<\/template>/);
     const sm = src.match(/<script>([\s\S]*?)<\/script>/);
@@ -160,7 +154,7 @@ function checkTemplateRefs(options = {}) {
 
   if (!quiet) {
     console.log('\n[vui-uniapp] 模板作用域校验');
-    console.log(`  扫描文件数: ${vueFiles.length}`);
+    console.log(`  扫描文件数: ${vueFilesList.length}`);
     if (errors.length) {
       console.log('\n  错误:');
       errors.forEach((e) => console.log(`    x ${e}`));
@@ -170,7 +164,7 @@ function checkTemplateRefs(options = {}) {
     console.log('');
   }
 
-  return { errors, warns, stats: { files: vueFiles.length } };
+  return { errors, warns, stats: { files: vueFilesList.length } };
 }
 
 module.exports = { checkTemplateRefs, collectRefs, stripLiterals };

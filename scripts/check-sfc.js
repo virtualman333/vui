@@ -4,7 +4,7 @@
  *
  * 为什么需要它
  * ------------
- * 本仓库有 47 个手写组件，但环境里没有 HBuilderX，无法真机 / H5 实跑。现有两道静态
+ * 本仓库的组件全部是手写的，但环境里没有 HBuilderX，无法真机 / H5 实跑。现有两道静态
  * 检查都够不到「语法」这一层：
  *
  *   - scripts/check-template-refs.js  只查模板里引用的标识符是否存在
@@ -36,6 +36,9 @@
  */
 const fs = require('fs');
 const path = require('path');
+// 组件枚举的唯一来源；结构坏掉的组件在这里**不静默跳过**（旧实现 `if (existsSync(vue))` 会把
+// 「目录在、同名 .vue 不在」的组件整个丢掉，于是它连语法校验也一并豁免）。
+const { listComponents } = require('./lib/components');
 
 const root = path.resolve(__dirname, '..');
 
@@ -58,20 +61,16 @@ try {
 }
 
 // ---------- 组件收集 ----------
-function walkComponents() {
-  const base = path.join(root, 'uni_modules');
-  if (!fs.existsSync(base)) return [];
-  const out = [];
-  for (const mod of fs.readdirSync(base)) {
-    const compsDir = path.join(base, mod, 'components');
-    if (!fs.existsSync(compsDir)) continue;
-    for (const comp of fs.readdirSync(compsDir)) {
-      const vue = path.join(compsDir, comp, comp + '.vue');
-      if (fs.existsSync(vue)) out.push({ comp, vue, rel: `uni_modules/${mod}/${comp}/${comp}.vue` });
-    }
-  }
-  return out;
-}
+const filter = process.argv.slice(2).filter((a) => !a.startsWith('-'));
+const all = listComponents();
+const broken = all.filter((c) => c.problem);
+let entries = all.filter((c) => c.hasVue);
+if (filter.length) entries = entries.filter((c) => filter.includes(c.comp));
+const comps = entries.map((c) => ({
+  comp: c.comp,
+  vue: c.vue,
+  rel: `uni_modules/${c.id}/components/${c.comp}/${c.comp}.vue`,
+}));
 
 /** compileTemplate / parse 的错误项可能是字符串或对象，统一降成可读文本。 */
 function errText(e) {
@@ -80,15 +79,20 @@ function errText(e) {
   return JSON.stringify(e);
 }
 
-const filter = process.argv.slice(2).filter((a) => !a.startsWith('-'));
-let comps = walkComponents();
-if (filter.length) comps = comps.filter((c) => filter.includes(c.comp));
-
 const errors = [];
 let parsed = 0;
 let scriptsCompiled = 0;
 let templatesCompiled = 0;
 let stylesCompiled = 0;
+
+// 结构坏掉的组件必须报出来，而不是当作「没有这个组件」放过去
+for (const c of broken) {
+  errors.push(
+    c.problem === 'no-components-dir'
+      ? `${c.id}: 缺少 components/${c.id}/ 目录（见 AGENTS.md 第三节）`
+      : `${c.id}: 目录里没有 ${c.comp}.vue，无法做语法校验 —— 这个组件也不在包里`
+  );
+}
 
 for (const c of comps) {
   const source = fs.readFileSync(c.vue, 'utf8');

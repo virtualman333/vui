@@ -33,6 +33,8 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+// 组件集合的唯一来源（本文件旧实现自己 readdir 了一次，且不滤前缀）
+const { componentIds } = require('./lib/components');
 
 const root = path.resolve(__dirname, '..');
 
@@ -146,10 +148,8 @@ for (const rel of REQUIRED) {
 }
 
 // ── 3. 每个组件的四件套齐全（AGENTS.md 第三节）────────────────────────────
-const uniDir = path.join(root, 'uni_modules');
-const comps = fs.existsSync(uniDir)
-  ? fs.readdirSync(uniDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
-  : [];
+// 组件集合来自 scripts/lib/components.js（唯一实现）
+const comps = componentIds();
 if (!comps.length) {
   report(G_COMPONENT, '仓库里找不到任何组件目录（uni_modules/ 为空？）');
 }

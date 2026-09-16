@@ -31,6 +31,8 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { preflight } = require('./release-preflight');
+// 组件枚举的唯一来源（版本同步要覆盖到每一个组件，漏一个就会在插件市场显示旧版本）
+const { componentIds } = require('./lib/components');
 
 const root = path.resolve(__dirname, '..');
 const isWin = process.platform === 'win32';
@@ -208,8 +210,8 @@ log('ok', `package.json: ${currentVersion} -> ${nextVersion}`);
 let synced = 0;
 const um = path.join(root, 'uni_modules');
 if (fs.existsSync(um)) {
-  for (const mod of fs.readdirSync(um)) {
-    const p = path.join(um, mod, 'package.json');
+  for (const component of componentIds()) {
+    const p = path.join(um, component, 'package.json');
     if (!fs.existsSync(p)) continue;
     try {
       const m = JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -219,7 +221,7 @@ if (fs.existsSync(um)) {
         synced += 1;
       }
     } catch (e) {
-      console.log(`  ! ${mod}/package.json 解析失败，已跳过`);
+      console.log(`  ! ${component}/package.json 解析失败，已跳过`);
     }
   }
 }

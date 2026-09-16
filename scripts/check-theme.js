@@ -36,6 +36,8 @@
  */
 const fs = require('fs');
 const path = require('path');
+// 组件集合的唯一来源（本文件旧实现自己 readdir 了一次）
+const { componentIds } = require('./lib/components');
 
 const root = path.resolve(__dirname, '..');
 const MODULES = path.join(root, 'uni_modules');
@@ -200,11 +202,7 @@ if (!fs.existsSync(MODULES)) {
   process.exit(1);
 }
 
-const components = fs
-  .readdirSync(MODULES, { withFileTypes: true })
-  .filter((e) => e.isDirectory() && e.name.startsWith('vui-'))
-  .map((e) => e.name)
-  .sort();
+const components = componentIds();
 
 const all = [];
 let exemptTotal = 0;

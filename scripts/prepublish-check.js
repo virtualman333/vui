@@ -15,6 +15,11 @@
  */
 const fs = require('fs');
 const path = require('path');
+// 组件枚举的唯一来源。旧实现在本文件里自己写了一份 walk——
+// 它会把「目录在、同名 .vue 不在」的组件从集合里**静默丢弃**，于是 prepublishOnly
+// 照样打印「校验通过，可以发布」，而 AGENTS.md 第三节那条红线的后果
+// （用户的 easycom 配置静默失效）没有任何东西拦得住。详见 scripts/lib/components.js 头部。
+const { listComponents, vueFiles, COMPONENT_PARTS } = require('./lib/components');
 
 const root = path.resolve(__dirname, '..');
 const errors = [];
@@ -32,37 +37,35 @@ function pascal(cid) {
   return cid.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('');
 }
 
-function walkComponents() {
-  const base = path.join(root, 'uni_modules');
-  if (!fs.existsSync(base)) return [];
-  const out = [];
-  for (const mod of fs.readdirSync(base)) {
-    const compsDir = path.join(base, mod, 'components');
-    if (!fs.existsSync(compsDir)) continue;
-    for (const comp of fs.readdirSync(compsDir)) {
-      const vue = path.join(compsDir, comp, comp + '.vue');
-      if (fs.existsSync(vue)) {
-        out.push({ mod, comp, dir: path.join(base, mod), vue, rel: `uni_modules/${mod}` });
-      }
-    }
-  }
-  return out;
-}
-
 // 1 + 2. 组件结构与路径规范
-const comps = walkComponents();
+const comps = listComponents();
 if (comps.length === 0) errors.push('uni_modules 下未找到任何组件');
 
 for (const c of comps) {
-  for (const f of ['package.json', 'readme.md', 'changelog.md']) {
-    if (!fs.existsSync(path.join(c.dir, f))) errors.push(`组件 ${c.comp} 缺少 ${f}`);
+  for (const f of COMPONENT_PARTS) {
+    if (!fs.existsSync(path.join(c.dir, f))) errors.push(`组件 ${c.id} 缺少 ${f}`);
+  }
+  if (c.problem === 'no-components-dir') {
+    errors.push(
+      `组件 ${c.id} 缺少 components/${c.id}/ 目录（easycom 通配规则要求 ` +
+        `uni_modules/${c.id}/components/${c.id}/${c.id}.vue，见 AGENTS.md 第三节）`
+    );
+    continue;
+  }
+  if (!c.hasVue) {
+    errors.push(
+      `组件 ${c.id} 的目录里没有 ${c.comp}.vue —— easycom 按同名文件找入口，缺它等于这个组件` +
+        `根本不在包里（使用方的引入配置会静默失效），而其它检查都会照常通过`
+    );
+    continue; // 没有源文件，下面的 template / script 检查无从谈起
   }
   const src = readIfExists(c.vue) || '';
   if (!/<template>/.test(src)) errors.push(`组件 ${c.comp} 缺少 <template>`);
   if (!/<script>/.test(src)) errors.push(`组件 ${c.comp} 缺少 <script>`);
-  if (c.mod !== c.comp) {
+  if (c.problem === 'mismatch') {
     errors.push(
-      `组件 ${c.comp} 的目录结构不符合 easycom 通配规则（应在 uni_modules/${c.comp}/components/${c.comp}/）：当前在 uni_modules/${c.mod}/`
+      `组件 ${c.id} 的目录结构不符合 easycom 通配规则（应在 uni_modules/${c.id}/components/${c.id}/）：` +
+        `当前在 uni_modules/${c.id}/components/${c.comp}/`
     );
   }
 }
@@ -92,7 +95,9 @@ if (!dts) {
 } else {
   const declared = new Set([...dts.matchAll(/export const (Vui\w+):/g)].map((m) => m[1]));
   for (const c of comps) {
-    const p = pascal(c.comp);
+    // c.comp 在「缺 components/ 目录」时是 null，退回组件 id —— 结构坏掉时这条检查
+    // 仍要能报出来，不能因为取不到目录名就整个崩掉（失败路径必须走得通）。
+    const p = pascal(c.comp || c.id);
     if (!declared.has(p)) errors.push(`types/index.d.ts 缺少组件 ${p} 的类型声明`);
   }
 }
@@ -124,9 +129,21 @@ try {
   warns.push(`模板作用域校验未能执行: ${e.message}`);
 }
 
+// 7.5 两个「组件数」必须一致
+// 旧实现里它们来自两套 walk（本文件按「有名同 .vue 的目录」、模板校验按「所有 .vue」），
+// 于是在一个 .vue 名字写错时，同一个脚本会同时打印「组件数量: 48」和「模板已查: 49 个组件」——
+// 矛盾摆在输出里，却没有任何东西把它当成问题。一个组件恰好一个入口 .vue，不一致就是结构坏了。
+const vueCount = vueFiles().length;
+if (vueCount !== comps.length) {
+  errors.push(
+    `组件枚举与 uni_modules 下的 .vue 数量不一致：组件 ${comps.length} 个、.vue 文件 ${vueCount} 个。` +
+      '一个组件恰好一个入口 .vue；不一致说明有组件的目录结构坏了，或存在游离的 .vue 文件。'
+  );
+}
+
 // 输出
 console.log('\n[vui-uniapp] 发布前校验');
-console.log(`  组件数量: ${comps.length}`);
+console.log(`  组件数量: ${comps.length}   .vue 文件: ${vueCount}`);
 console.log(`  包版本:   ${pkg.version}`);
 console.log(`  模板已查: ${tmplChecked} 个组件`);
 

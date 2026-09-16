@@ -69,6 +69,11 @@ uni_modules/vui-xxx/
 只要出现 `uni_modules/vui-form/components/vui-form-item/` 这种「子组件塞在父组件目录里」的写法，
 用户配好 easycom 后 `<vui-form-item>` 就**用不了**。`scripts/prepublish-check.js` 会拦截这种情况。
 
+**同名 `.vue` 这一条也在拦截范围内**：`vui-xxx.vue` 写成了别的名字（例如 `index.vue`）时，
+easycom 同样找不到入口，组件等于不在包里。组件集合的唯一来源是 `scripts/lib/components.js`，
+它的枚举**不会因为文件缺失就把这个组件从集合里去掉** —— 那种「静默丢弃」会让所有检查同时变绿，
+`npm run check:components` 专门盯着这条（在副本里注入坏结构，要求必须拦下）。
+
 组合组件（如 form + form-item）用 `provide/inject` 通信，它是运行时机制，与目录层次无关。
 
 ---
@@ -190,6 +195,7 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 | `npm run check:rules` | 执行第二节红线与第四节写法约定里可静态判定的几条：`v-html`、`<script setup>`、Vue2 的 `model:` 选项、跨 uni_modules import、用了 `$emit` 却没声明 `emits`、缺首块 JSDoc、`.npmrc` 是否被 git 跟踪或被忽略 |
 | `npm run check:release` | `release.js` 第 0 步发布前置检查的自检：注入假环境跑一遍四类拦截（凭证不可用 / registry 已有该版本 / 本地 tag 已存在 / `.npmrc` 未被忽略），外加三条结构锁（`preflight` 必须在任何写入之前被调用、旧的「只看 `.npmrc` 文件是否存在」判据不得复活） |
 | `npm run check:template` | 仅模板作用域（`check:all` 已含，留作单独排查） |
+| `npm run check:components` | 组件枚举与结构检查的自检：在仓库副本里注入「`.vue` 名字写错」「缺 `components/` 目录」两种坏结构，`prepublish-check` 必须拦下并点名；外加两条结构锁（组件枚举只有一份、组件数 == `.vue` 数） |
 
 - 入口 / 类型声明这两条尤其重要：`index.js` 与 `types/index.d.ts` 都是**发布时由 `scripts/gen-package.py` 重新生成**的，生成脚本出问题时，`check` 的覆盖性校验照样全绿（组件都在），但使用方 import 本包会直接编译报错。
 - `check:gen` 补的是上面几条共同的盲区：它们查的都是「产物**自身**是否合法」，没有一条查「产物是否还**反映源码**」。改了组件没跑 `npm run gen` 时，旧产物照样合法；而新组件漏登记 `CATEGORY` 时，重新生成的结果与已提交产物**完全一致**（都缺它），只有组件集合比对能发现 —— 这两种情况都真实发生过。
@@ -200,6 +206,8 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 环境里没有 HBuilderX 时无法真机/H5 实跑，因此**必须**用上述静态校验替代，并在提交信息里说明未做实跑验证。
 
 `check:release` 补的是**发布链自身**的盲区：`check:all` 里的其余八条都在看「要发出去的东西对不对」，没有一条看「这台机器现在发不发得出去」。而 `release.js` 的第 3~5 步（改版本号 → commit + tag → push）**不可回退**，tag 一推版本号就被占住。此前第 0 步只判断 `.npmrc` 文件**存不存在**——「文件存在」与「凭证可用」是两件事，一个只写了 registry 换源配置的 `~/.npmrc` 就能骗过它，于是脚本走完 bump → commit → tag → push 才倒在 `npm publish`，留下第一节明令禁止的「版本已升、包没发」，而且下次再跑会跳到下一个版本号。第 0 步因此改为实探（`npm whoami` + 目标版本是否已被 registry 占用 + 本地 tag 是否已存在），改法见 `scripts/release-preflight.js`，自检见 `scripts/check-release.js`。自检里的用案例「只有 registry 配置的 `~/.npmrc`」就是为这个漏洞写的：它必须红。
+
+`check:components` 补的是**枚举自身**的盲区：`check:all` 里其余脚本都要先回答「有哪些组件」，而这个答案此前在 6 个脚本里各算了一遍、语义有三种（只看目录名 / 目录名 + 同名 `.vue` / 所有 `.vue` 文件）。其中「目录名 + 同名 `.vue`」那种写法（`prepublish-check` 与 `check-sfc` 都用过）**会把结构坏掉的组件从集合里静默丢弃**：实测在副本里放一个 `components/vui-probe/index.vue`（名字写错），`prepublish-check` 照样打印「校验通过，可以发布」，而它自己下一行还打印着「模板已查: 49 个组件」——两个数字互相矛盾却没人管；后果就是第三节那条红灯变成绿灯。现在枚举收敛到 `scripts/lib/components.js`（`listComponents()` 永不静默丢弃），`check:components` 用子进程真跑一遍来证明它确实还拦得住，并锁死「枚举只有一份」。
 
 ---
 

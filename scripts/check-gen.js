@@ -34,6 +34,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+// 组件集合的唯一来源（本文件旧实现自己 readdir 了一次）
+const { componentIds } = require('./lib/components');
 
 const root = path.resolve(__dirname, '..');
 
@@ -107,11 +109,8 @@ try {
   // 只比对 CATEGORY 这个白名单本身，不去扫文档正文 —— 正文里 `--vui-text-color`
   // 这类 CSS 变量、包名 `vui-uniapp`、示例占位符 `vui-xxx` 全都长得像组件名，
   // 按正则扫正文只会得到一堆误报（第一版就是这么错的）。
-  const comps = fs
-    .readdirSync(path.join(root, 'uni_modules'), { withFileTypes: true })
-    .filter((d) => d.isDirectory() && d.name.startsWith('vui-'))
-    .map((d) => d.name)
-    .sort();
+  // 组件集合来自 scripts/lib/components.js（唯一实现），别在这里再 readdir 一次。
+  const comps = componentIds();
 
   const categorized = readCategoryIds();
   if (categorized === null) {
