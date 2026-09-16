@@ -158,18 +158,24 @@ npm run check:template
 
 ## 八、校验链
 
-发布前必须全部通过：
+发布前必须全部通过。**清单的唯一来源是 `npm run check:all`**——`release.js` 第 1 步、生成后复校、以及 `prepublishOnly` 都调它，不要再在别处手写一份清单（两处写法必然漂移）。
 
 ```bash
-npm run check            # 结构 / 路径规范 / 类型覆盖 / 模板作用域
-npm run check:template   # 仅模板作用域（可单独排查）
-npm run pack             # 核对实际打包内容与体积
+npm run check:all   # ①~⑤ 全跑（发布链用的就是这条）
+npm run pack        # 核对实际打包内容与体积
 ```
 
-- `check-sfc` 类语法校验：用 `@vue/compiler-sfc` + `sass` 对全部 `.vue` 做
-  parse / 编译 script / 编译 template / SCSS 编译。
-- 类型声明：`tsc --noEmit`（需自建 `vue` 模块 stub，`moduleResolution` 用 `bundler`）。
-- 入口语法：把 `index.js` 复制为 `.mjs` 后 `node --check`。
+`check:all` 的组成（各自也可单独排查）：
+
+| 命令 | 查什么 |
+|------|--------|
+| `npm run check` | 结构 / 路径规范 / 类型覆盖 / 模板作用域（`prepublish-check.js`，内含 ⑦） |
+| `npm run check:sfc` | 用 `@vue/compiler-sfc` + `sass` 对全部 `.vue` 做 parse / 编译 script / 编译 template / SCSS 编译 |
+| `npm run check:entry` | 把 `index.js` 复制为 `.mjs` 后 `node --check`（入口语法 + 是否有 default 导出） |
+| `npm run check:types` | `tsc --noEmit` 检查 `types/index.d.ts`（自建 `vue` 模块 stub，`moduleResolution: bundler`；`skipLibCheck` 必须为 false，否则等于没查） |
+| `npm run check:template` | 仅模板作用域（`check:all` 已含，留作单独排查） |
+
+- 入口 / 类型声明这两条尤其重要：`index.js` 与 `types/index.d.ts` 都是**发布时由 `scripts/gen-package.py` 重新生成**的，生成脚本出问题时，`check` 的覆盖性校验照样全绿（组件都在），但使用方 import 本包会直接编译报错。
 
 环境里没有 HBuilderX 时无法真机/H5 实跑，因此**必须**用上述静态校验替代，并在提交信息里说明未做实跑验证。
 
@@ -191,5 +197,5 @@ npm run pack             # 核对实际打包内容与体积
 2. 写组件，遵守第四节（JSDoc、emits、modelValue、不跨模块 import）
 3. `python scripts/inject-theme.py` 注入主题变量兜底块
 4. 在 `scripts/gen-docs.py` 的 `CATEGORY` 中登记组件，否则不会出现在 README 与 API 文档里
-5. `npm run check` + `npm run check:template` 全部通过
+5. `npm run check:all` 全部通过（校验链的唯一来源，见第八节）
 6. `npm run release -- minor`（会重新生成产物、升版本、打 tag、推送、发布）

@@ -13,7 +13,8 @@
  *   npm run release -- minor --dry-run   # 只跑校验与产物生成，不写任何东西
  *
  * 执行顺序：
- *   1. 发布前校验（结构 / 路径 / 类型覆盖 / 模板作用域）
+ *   1. 发布前校验（`npm run check:all` —— 结构 / 路径 / 类型覆盖 / 模板作用域 /
+ *      SFC 语法 / 入口语法 / 类型声明，唯一来源见 AGENTS.md 第八节）
  *   2. 重新生成 index.js、types/index.d.ts、docs/API.md、README.md
  *   3. 提升 package.json 版本号
  *   4. git commit + tag vX.Y.Z
@@ -141,8 +142,11 @@ if (fs.existsSync(npmrcPath)) {
 }
 
 // ---------- 1. 发布前校验 ----------
+// 走 npm run check:all（校验链的唯一来源，见 AGENTS.md 第八节）。
+// 此前这里直接调 prepublish-check.js，导致 check:sfc / check:entry / check:types
+// 只在有人手动跑时才生效——发布链自己漏掉了三分之二的校验。
 console.log('\n[1/7] 发布前校验');
-if (!run('node', ['scripts/prepublish-check.js']).ok) fail('校验未通过，已中止发布。');
+if (!run('npm', ['run', 'check:all']).ok) fail('校验未通过，已中止发布。');
 
 // ---------- 2. 重新生成产物 ----------
 console.log('\n[2/7] 重新生成产物');
@@ -160,7 +164,7 @@ if (!python) {
 // 生成后复校一次，确保产物与源码一致
 if (python) {
   console.log('\n       生成后复校');
-  if (!run('node', ['scripts/prepublish-check.js']).ok) {
+  if (!run('npm', ['run', 'check:all']).ok) {
     fail('重新生成产物后校验未通过，请检查组件定义。');
   }
 }

@@ -371,7 +371,7 @@ npm run release -- major   # 删除或重命名 props、改变默认行为
 
 | 步骤 | 动作 |
 | --- | --- |
-| 1 | 跑 `scripts/prepublish-check.js` 与 `scripts/check-template-refs.js` 校验 |
+| 1 | 跑 `npm run check:all` 校验（校验链的唯一来源，见 `AGENTS.md` 第八节） |
 | 2 | 重新生成 `index.js`、`types/index.d.ts`、`docs/API.md`、`README.md` |
 | 3 | 提升 `package.json` 与各组件 `package.json` 的版本号 |
 | 4 | 提交并打 `vX.Y.Z` tag |
@@ -413,7 +413,7 @@ npm run release -- minor --dry-run
 3. 修改代码。若新增组件，请保持 `uni_modules/vui-xxx/components/vui-xxx/vui-xxx.vue` 的目录结构；
 4. 新增组件后跑一次 `python scripts/inject-theme.py` 注入主题变量兜底块，
    并在 `scripts/gen-docs.py` 的 `CATEGORY` 中登记该组件；
-5. 运行 `npm run check` 与 `npm run check:template` 确认无误；
+5. 运行 `npm run check:all` 确认无误（校验链的唯一来源，见 `AGENTS.md` 第八节）；
 6. 按[版本与发布](#版本与发布)提升版本号并发布（`npm run release`）；
 7. 推送并创建 Pull Request。
 

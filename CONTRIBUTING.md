@@ -57,12 +57,12 @@ python scripts/inject-theme.py
 ### 4. 本地校验
 
 ```bash
-npm run check            # 结构 / 路径规范 / 类型覆盖 / 模板作用域
-npm run check:template   # 仅模板作用域检查
-npm run pack             # 核对打包内容与体积
+npm run check:all   # 校验链的唯一来源，见 AGENTS.md 第八节
+npm run pack        # 核对打包内容与体积
 ```
 
-三项都必须通过。
+两项都必须通过。`check:all` 内部由 `check` / `check:sfc` / `check:entry` / `check:types` 组成，
+单独排查时可分别执行；清单只在 `package.json` 与 `AGENTS.md` 第八节维护，别在别处再抄一份。
 
 ### 5. 发布
 
