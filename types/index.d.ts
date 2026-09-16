@@ -608,6 +608,8 @@ export interface VuiMarkdownProps {
 export interface VuiMarkdownEmits {
 	/** 代码块复制成功，参数为已复制内容 */
 	copy: (...args: any[]) => void;
+	/** 点击链接，参数为链接地址（组件已同时把地址复制到剪贴板） */
+	link: (...args: any[]) => void;
 }
 
 export const VuiMarkdown: DefineComponent<VuiMarkdownProps>;

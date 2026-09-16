@@ -8,18 +8,18 @@
 				:class="'vui-markdown__h--' + block.level"
 				:selectable="selectable"
 			>
-				<text v-for="(seg, si) in block.segments" :key="si" :class="segClass(seg)">{{ seg.text }}</text>
+				<text v-for="(seg, si) in block.segments" :key="si" :class="segClass(seg)" @click="onSegTap(seg)">{{ seg.text }}</text>
 			</text>
 
 			<!-- 段落 -->
 			<text v-else-if="block.type === 'p'" class="vui-markdown__p" :selectable="selectable">
-				<text v-for="(seg, si) in block.segments" :key="si" :class="segClass(seg)">{{ seg.text }}</text>
+				<text v-for="(seg, si) in block.segments" :key="si" :class="segClass(seg)" @click="onSegTap(seg)">{{ seg.text }}</text>
 			</text>
 
 			<!-- 引用 -->
 			<view v-else-if="block.type === 'quote'" class="vui-markdown__quote">
 				<text class="vui-markdown__quote-text" :selectable="selectable">
-					<text v-for="(seg, si) in block.segments" :key="si" :class="segClass(seg)">{{ seg.text }}</text>
+					<text v-for="(seg, si) in block.segments" :key="si" :class="segClass(seg)" @click="onSegTap(seg)">{{ seg.text }}</text>
 				</text>
 			</view>
 
@@ -28,7 +28,7 @@
 				<view v-for="(item, li) in block.items" :key="li" class="vui-markdown__li">
 					<text class="vui-markdown__li-marker">{{ block.ordered ? li + 1 + '.' : '•' }}</text>
 					<text class="vui-markdown__li-text" :selectable="selectable">
-						<text v-for="(seg, si) in item.segments" :key="si" :class="segClass(seg)">{{ seg.text }}</text>
+						<text v-for="(seg, si) in item.segments" :key="si" :class="segClass(seg)" @click="onSegTap(seg)">{{ seg.text }}</text>
 					</text>
 				</view>
 			</view>
@@ -57,7 +57,7 @@
 								class="vui-markdown__th"
 								:style="cellStyle(block, ci)"
 							>
-								<text v-for="(seg, si) in cell.segments" :key="si" :class="segClass(seg)">{{ seg.text }}</text>
+								<text v-for="(seg, si) in cell.segments" :key="si" :class="segClass(seg)" @click="onSegTap(seg)">{{ seg.text }}</text>
 							</view>
 						</view>
 						<view v-for="(row, ri) in block.rows" :key="ri" class="vui-markdown__tr">
@@ -67,7 +67,7 @@
 								class="vui-markdown__td"
 								:style="cellStyle(block, ci)"
 							>
-								<text v-for="(seg, si) in cell.segments" :key="si" :class="segClass(seg)">{{ seg.text }}</text>
+								<text v-for="(seg, si) in cell.segments" :key="si" :class="segClass(seg)" @click="onSegTap(seg)">{{ seg.text }}</text>
 							</view>
 						</view>
 					</view>
@@ -83,17 +83,18 @@
 <script>
 /**
  * 轻量 Markdown 渲染
- * @description 渲染常用 Markdown 语法（标题/段落/列表/引用/代码块/表格/分隔线 + 粗体/斜体/行内代码）。
+ * @description 渲染常用 Markdown 语法（标题/段落/列表/引用/代码块/表格/分隔线 + 粗体/斜体/行内代码/链接）。
  * 不使用 v-html，全部通过结构化节点渲染，因此在小程序端同样可用。
  * @property {String} content Markdown 源文本
  * @property {Boolean} selectable 文字是否可选中
  * @property {Boolean} showCopy 代码块是否显示复制按钮
  * @property {String} codeMaxHeight 代码块最大高度
  * @event {Function} copy 代码块复制成功，参数为已复制内容
+ * @event {Function} link 点击链接，参数为链接地址（组件已同时把地址复制到剪贴板）
  */
 export default {
 	name: 'VuiMarkdown',
-	emits: ['copy'],
+	emits: ['copy', 'link'],
 	props: {
 		content: {
 			type: String,
@@ -268,11 +269,23 @@ export default {
 			flush();
 			return blocks;
 		},
-		/** 行内解析：粗体 / 斜体 / 行内代码 */
+		/**
+		 * 行内解析：行内代码 / 链接 / 图片 / 粗体 / 斜体
+		 *
+		 * 三个容易踩的点：
+		 *  ① **一次扫描，不逐轮 replace**。分轮替换会让前一轮产出的文本被后一轮再解析一遍，
+		 *     典型后果是「代码里的 `[a](b)` 变成链接」「链接文字里的 `*` 变成斜体」。
+		 *     这里用一条正则按出现位置切，**行内代码排在首位**，于是 `` `[a](b)` `` 只会是代码。
+		 *  ② **`![...]` 必须排在 `[...]` 前面**：否则图片会被从 `[` 处切成普通链接，
+		 *     前面的 `!` 变成一段孤零零的文本。
+		 *  ③ **加粗里的链接要再走一遍**：`**[文档](url)**` 是模型输出的常客，而单遍扫描
+		 *     不会回头解析 `**...**` 里面 —— 那就等于把原文 `[文档](url)` 直接给用户看。
+		 *     所以命中外层强调 token 时，若内部还含行内语法，就递归一次并给片段打上修饰标记。
+		 */
 		parseInline(text) {
 			const segs = [];
 			const src = text === null || text === undefined ? '' : String(text);
-			const re = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g;
+			const re = /(`[^`]+`|!\[[^\]]*\]\([^)\s]+\)|\[[^\]]*\]\([^)\s]+\)|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_)/g;
 			let last = 0;
 			let m;
 			while ((m = re.exec(src)) !== null) {
@@ -280,12 +293,15 @@ export default {
 					segs.push({ type: 'text', text: src.slice(last, m.index) });
 				}
 				const token = m[0];
-				if (token.indexOf('**') === 0 || token.indexOf('__') === 0) {
-					segs.push({ type: 'bold', text: token.slice(2, -2) });
+				const link = this.parseLinkToken(token);
+				if (link) {
+					segs.push(link);
+				} else if (token.indexOf('**') === 0 || token.indexOf('__') === 0) {
+					segs.push.apply(segs, this.emphasize(token.slice(2, -2), 'bold'));
 				} else if (token.charAt(0) === '`') {
 					segs.push({ type: 'code', text: token.slice(1, -1) });
 				} else {
-					segs.push({ type: 'italic', text: token.slice(1, -1) });
+					segs.push.apply(segs, this.emphasize(token.slice(1, -1), 'italic'));
 				}
 				last = m.index + token.length;
 			}
@@ -294,13 +310,71 @@ export default {
 			}
 			return segs;
 		},
-		/** 行内片段对应的样式类 */
+		/**
+		 * `[文本](地址)` / `![替代文本](图片地址)` → link 片段；不是链接时返回 null。
+		 *
+		 * 图片**不内联渲染**，而是渲染成「替代文本」（缺省「图片」）并挂上图片地址：
+		 * 远程图片在小程序端要域名白名单、在 App 端要额外配置，静默加载失败比干脆不显示更难查。
+		 * 点击行为与普通链接一致（复制地址），宿主可用 `@link` 事件自行接管。
+		 *
+		 * 已知取舍：地址里含 `)` 时会在此处断句（`[a](x(y))` 只认到 `x(y`）——
+		 * 这是行内写法本身的歧义，不猜。
+		 */
+		parseLinkToken(token) {
+			const src = token === null || token === undefined ? '' : String(token);
+			if (src.charAt(0) !== '[' && src.indexOf('![') !== 0) return null;
+			const m = /^(!?)\[([^\]]*)\]\(([^)\s]+)\)$/.exec(src);
+			if (!m) return null;
+			const image = m[1] === '!';
+			const text = m[2] || (image ? '图片' : m[3]);
+			return { type: 'link', text, url: m[3], image };
+		},
+		/**
+		 * 给一段强调文本产片段：里面没有别的行内语法时保持原来的单片段形态
+		 * （`**重点**` 仍是 `{type:'bold'}`），含链接等才展开并打上 `bold` / `italic` 标记。
+		 */
+		emphasize(inner, kind) {
+			const nested = this.parseInline(inner);
+			if (nested.length === 1 && nested[0].type === 'text') {
+				return [{ type: kind, text: inner }];
+			}
+			const flag = {};
+			flag[kind] = true;
+			return nested.map((s) => Object.assign({}, s, flag));
+		},
+		/** 行内片段对应的样式类（类型 + 强调修饰标记） */
 		segClass(seg) {
-			if (!seg || !seg.type || seg.type === 'text') return '';
-			if (seg.type === 'bold') return 'vui-markdown__bold';
-			if (seg.type === 'italic') return 'vui-markdown__italic';
-			if (seg.type === 'code') return 'vui-markdown__code-inline';
-			return '';
+			if (!seg || !seg.type) return '';
+			const cls = [];
+			if (seg.type === 'bold') cls.push('vui-markdown__bold');
+			else if (seg.type === 'italic') cls.push('vui-markdown__italic');
+			else if (seg.type === 'code') cls.push('vui-markdown__code-inline');
+			else if (seg.type === 'link') cls.push('vui-markdown__link');
+			// 强调里的链接：类型是 link，但有 bold / italic 标记（见 emphasize()）
+			if (seg.bold) cls.push('vui-markdown__bold');
+			if (seg.italic) cls.push('vui-markdown__italic');
+			return cls.join(' ');
+		},
+		/** 片段点击：只有链接片段有行为，其余原样返回（模板里每个片段都挂这一个入口） */
+		onSegTap(seg) {
+			if (!seg || seg.type !== 'link' || !seg.url) return;
+			this.$emit('link', seg.url);
+			if (typeof uni === 'undefined' || typeof uni.setClipboardData !== 'function') return;
+			try {
+				uni.setClipboardData({
+					data: String(seg.url),
+					showToast: false,
+					success: () => {
+						// 链接没有像代码块那样的「已复制」按钮可以变字，所以必须给一次反馈，
+						// 否则用户点了一下什么都没发生（复制本身是静默的）。
+						if (typeof uni.showToast === 'function') {
+							uni.showToast({ title: '链接已复制', icon: 'none' });
+						}
+					}
+				});
+			} catch (err) {
+				/* 复制失败不打断阅读 */
+			}
 		},
 		/**
 		 * 表格行 → 单元格文本数组；不是表格行时返回 null。
@@ -502,6 +576,12 @@ $vui-code-color: #abb2bf !default;
 		font-size: 26rpx;
 		color: $vui-error;
 		background-color: $vui-fill-color;
+	}
+
+	/* 链接：只靠颜色区分。刻意不加 text-decoration —— 小程序端对嵌套 <text> 的
+	   下划线支持不一致，会出现「有的端有、有的端没有」的差异，比不加更难查。 */
+	&__link {
+		color: $vui-primary;
 	}
 
 	&__quote {

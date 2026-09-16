@@ -296,6 +296,116 @@ test('表格样式只引用主题变量（硬编码色值由 check:theme 兜底�
   deepEq(hex, [], '表格样式里出现硬编码色值');
 });
 
+// ── 10. 行内链接 / 图片 ───────────────────────────────────────────────────
+
+/**
+ * 这一组补的是「解析器认识表格、却不认识链接」那类缺口。
+ *
+ * 链接是模型输出里第二常见的结构（仅次于表格），此前 `[文档](https://…)` 被**原样吐给用户** ——
+ * 满屏方括号加网址，而十一道检查全绿。与「表格被吞成普通段落」是同一类故障：
+ * 解析器没覆盖到的语法不会报错，只会把 Markdown 源码直接显示出来。
+ *
+ * 图片刻意**不内联渲染**，只渲染替代文本并挂上地址（远程图在小程序要域名白名单、
+ * 在 App 要额外配置，静默加载失败比干脆不显示更难查）。
+ */
+const segsOf = (md) => blocks(md)[0].segments;
+const segOf = (md, type) => segsOf(md).find((s) => s.type === type);
+
+test('`[文本](地址)` → link 片段（文本与地址分开，不再把原文给用户看）', () => {
+  deepEq(segsOf('见 [文档](https://a.com/b) 完'), [
+    { type: 'text', text: '见 ' },
+    { type: 'link', text: '文档', url: 'https://a.com/b', image: false },
+    { type: 'text', text: ' 完' }
+  ], '链接没被解析出来');
+});
+
+test('`![替代文本](图片地址)` → link 片段 + image 标记', () => {
+  const s = segOf('![架构图](https://x/y.png)', 'link');
+  ok(s, '图片语法没被识别 —— 用户会看到 `![架构图](…)` 原文');
+  eq(s.text, '架构图', '图片的替代文本没渲染出来');
+  eq(s.url, 'https://x/y.png');
+  eq(s.image, true, '图片没有 image 标记 —— 与普通链接分不开');
+});
+
+test('替代文本为空时显示「图片」、链接文本为空时显示地址（不留一片空白）', () => {
+  eq(segOf('![](https://x/y.png)', 'link').text, '图片');
+  eq(segOf('[](https://a.com/b)', 'link').text, 'https://a.com/b');
+});
+
+test('没有 `(地址)` 的方括号不当链接（数组下标 `[0]` 只是文本）', () => {
+  deepEq(segsOf('数组 [0] 与 [x]'), [{ type: 'text', text: '数组 [0] 与 [x]' }]);
+});
+
+test('行内代码优先：`` `[a](b)` `` 是代码，后面的 [c](d) 才是链接', () => {
+  const s = segsOf('`[a](b)` 与 [c](d)');
+  eq(s[0].type, 'code', '行内代码里的方括号被当成了链接');
+  eq(s[0].text, '[a](b)');
+  eq(s[2].type, 'link', '代码后面的链接没解析');
+});
+
+test('`**[文档](地址)**` 既加粗又是链接（单遍扫描最容易漏的一种）', () => {
+  const s = segOf('**[文档](https://a.com)**', 'link');
+  ok(s, '加粗里的链接没解析 —— 用户会看到 `**[文档](…)` 原文，而这在模型输出里极常见');
+  eq(s.bold, true, '链接丢了加粗修饰');
+  eq(s.text, '文档');
+});
+
+test('`*[文档](地址)*` 同理带 italic 修饰', () => {
+  const s = segOf('*[文档](https://a.com)* 尾', 'link');
+  ok(s && s.italic === true, '斜体里的链接丢了 italic 修饰');
+});
+
+test('纯粹的加粗 / 斜体保持原样（这次改动不改变它们的片段形态）', () => {
+  deepEq(segsOf('**重点**'), [{ type: 'bold', text: '重点' }]);
+  deepEq(segsOf('*斜*'), [{ type: 'italic', text: '斜' }]);
+});
+
+test('链接在标题 / 列表 / 表格单元格里同样生效（三处共用同一套行内解析）', () => {
+  eq(blocks('## 见 [文档](https://a.com)')[0].segments[1].type, 'link', '标题里的链接没解析');
+  eq(blocks('- [文档](https://a.com)')[0].items[0].segments[0].type, 'link', '列表里的链接没解析');
+  eq(
+    table0(blocks('| A |\n| --- |\n| [x](https://a.com) |')).rows[0][0].segments[0].type,
+    'link',
+    '表格单元格里的链接没解析'
+  );
+});
+
+test('地址里的括号在此断句（刻意取舍，改它要连文档一起改）', () => {
+  const s = segsOf('[a](b)c)');
+  eq(s[0].type, 'link');
+  eq(s[0].url, 'b');
+  eq(s[1].text, 'c)');
+});
+
+test('模板里每个片段渲染点都挂了点击入口（链接点了没反应 = 没做）', () => {
+  const src = fs.readFileSync(FILE, 'utf8');
+  const tpl = src.slice(0, src.indexOf('</template>'));
+  // 计数不变量：渲染片段的地方与挂点击的地方必须一样多。
+  // 只断言「出现过 onSegTap」不够 —— 只挂一处也算出现过（第 9 轮的教训：检查要自带计数不变量）。
+  const rendered = (tpl.match(/segClass\(seg\)/g) || []).length;
+  const tappable = (tpl.match(/onSegTap\(seg\)/g) || []).length;
+  ok(rendered > 0, '模板里找不到片段渲染点 —— 模板结构变了，本检查需要同步');
+  eq(
+    tappable,
+    rendered,
+    `有 ${rendered} 处渲染片段，却只有 ${tappable} 处挂了点击 —— 漏掉的位置点链接没反应`
+  );
+});
+
+test('link 片段的样式类与样式块都在（否则链接和普通文字长得一样，没人知道能点）', () => {
+  const ctx = Object.assign({}, propsDefault, opts.data(), opts.methods);
+  ok(
+    String(ctx.segClass({ type: 'link', text: 'x' })).indexOf('vui-markdown__link') > -1,
+    'segClass 没给 link 片段样式类'
+  );
+  ok(
+    String(ctx.segClass({ type: 'link', bold: true })).indexOf('vui-markdown__bold') > -1,
+    '带 bold 标记的 link 丢了加粗类'
+  );
+  const style = fs.readFileSync(FILE, 'utf8');
+  ok(/&__link\s*\{/.test(style.slice(style.indexOf('<style'))), '样式块里没有 &__link —— 链接没有可辨识的样式');
+});
+
 // ── 汇总 ──────────────────────────────────────────────────────────────────
 
 console.log('');
