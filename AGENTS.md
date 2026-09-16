@@ -161,7 +161,7 @@ npm run check:template
 发布前必须全部通过。**清单的唯一来源是 `npm run check:all`**——`release.js` 第 1 步、生成后复校、以及 `prepublishOnly` 都调它，不要再在别处手写一份清单（两处写法必然漂移）。
 
 ```bash
-npm run check:all   # ①~⑤ 全跑（发布链用的就是这条）
+npm run check:all   # 全部跑（发布链用的就是这条）
 npm run pack        # 核对实际打包内容与体积
 ```
 
@@ -173,9 +173,11 @@ npm run pack        # 核对实际打包内容与体积
 | `npm run check:sfc` | 用 `@vue/compiler-sfc` + `sass` 对全部 `.vue` 做 parse / 编译 script / 编译 template / SCSS 编译 |
 | `npm run check:entry` | 把 `index.js` 复制为 `.mjs` 后 `node --check`（入口语法 + 是否有 default 导出） |
 | `npm run check:types` | `tsc --noEmit` 检查 `types/index.d.ts`（自建 `vue` 模块 stub，`moduleResolution: bundler`；`skipLibCheck` 必须为 false，否则等于没查） |
+| `npm run check:gen` | 在临时副本里重新跑生成器，与已提交产物逐文件比对；并校验 `uni_modules/` 组件集合与 `gen-docs.py` 的 `CATEGORY` 双向一致 |
 | `npm run check:template` | 仅模板作用域（`check:all` 已含，留作单独排查） |
 
 - 入口 / 类型声明这两条尤其重要：`index.js` 与 `types/index.d.ts` 都是**发布时由 `scripts/gen-package.py` 重新生成**的，生成脚本出问题时，`check` 的覆盖性校验照样全绿（组件都在），但使用方 import 本包会直接编译报错。
+- `check:gen` 补的是上面几条共同的盲区：它们查的都是「产物**自身**是否合法」，没有一条查「产物是否还**反映源码**」。改了组件没跑 `npm run gen` 时，旧产物照样合法；而新组件漏登记 `CATEGORY` 时，重新生成的结果与已提交产物**完全一致**（都缺它），只有组件集合比对能发现 —— 这两种情况都真实发生过。
 
 环境里没有 HBuilderX 时无法真机/H5 实跑，因此**必须**用上述静态校验替代，并在提交信息里说明未做实跑验证。
 
