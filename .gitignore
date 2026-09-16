@@ -18,6 +18,9 @@ Thumbs.db
 # npm 发布产物
 *.tgz
 
+# 会话临时文件（提交信息暂存等，勿入库；入了会让 git status 永久非空）
+.gitmsg*.txt
+
 # 本地 npm 凭证（严禁提交，含 _authToken 明文）
 .npmrc
 .npmrc.local
