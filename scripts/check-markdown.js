@@ -134,6 +134,23 @@ const types = (bs) => bs.map((b) => b.type);
 const table0 = (bs) => bs.find((b) => b.type === 'table');
 const cellText = (cell) => cell.text;
 
+/** 把组件的 <style lang="scss"> 真编译一遍，拿编译后的 CSS 做样式断言。
+ *  （源码里的嵌套写法与编译结果不是一对一：`&__task { &--done {} }` 与 `&__task--done {}`
+ *   编译出来相同，按源码字符串判会误伤其中一种。） */
+function compileStyle() {
+  const src = fs.readFileSync(FILE, 'utf8');
+  const { descriptor } = parse(src, { filename: 'vui-markdown.vue' });
+  const style = (descriptor.styles || []).find((s) => s.lang === 'scss');
+  if (!style) throw new Error('组件没有 <style lang="scss"> 块 —— 样式断言无从下手');
+  // eslint-disable-next-line global-require
+  const sass = require('sass');
+  return sass.compileString(style.content, {
+    syntax: 'scss',
+    quietDeps: true,
+    logger: { warn() {}, debug() {} }
+  }).css;
+}
+
 // ── 1. 识别 ───────────────────────────────────────────────────────────────
 
 test('表头 + 分隔行 + 数据行 → 一个 table 块', () => {
@@ -404,6 +421,129 @@ test('link 片段的样式类与样式块都在（否则链接和普通文字长
   );
   const style = fs.readFileSync(FILE, 'utf8');
   ok(/&__link\s*\{/.test(style.slice(style.indexOf('<style'))), '样式块里没有 &__link —— 链接没有可辨识的样式');
+});
+
+// ── 7. 列表：层级 / 任务框 / 编号 ──────────────────────────────────────────
+//
+// 这一节覆盖的都是「模型输出里天天出现、而此前渲染结果与原文结构不符」的形态：
+// 嵌套清单被拍平成四个同级圆点、待办清单把 `[ ]` 原文吐给用户、空行把编号列表
+// 拆成两个各自从 1 开始。三种都不会报错，只是用户看到的和模型写的不是一个东西。
+
+const ctx = () => Object.assign({}, propsDefault, opts.data(), opts.methods);
+const items = (md) => blocks(md)[0].items;
+const markers = (md) => {
+  const c = ctx();
+  /* 逐块展开：一份文档可能出多个列表块（类型交替时），只看第一块会漏掉后面那些 */
+  const out = [];
+  for (const b of blocks(md)) {
+    if (b.type !== 'list') continue;
+    b.items.forEach((it, i) => out.push(opts.methods.liMarker.call(c, b, it, i)));
+  }
+  return out;
+};
+const levels = (md) => items(md).map((it) => it.level);
+
+test('嵌套列表保留层级（此前被拍平成一个扁平列表 —— 层级信息直接丢给用户看）', () => {
+  const md = '- 一级 A\n  - 二级 A1\n  - 二级 A2\n- 一级 B';
+  eq(blocks(md).length, 1, '嵌套列表被拆成了多个块');
+  deepEq(levels(md), [0, 1, 1, 0], '缩进层级没被保留 —— 用户看到四个同一层的圆点');
+  deepEq(
+    items(md).map((it) => it.text),
+    ['一级 A', '二级 A1', '二级 A2', '一级 B'],
+    '列表项文本被改动了'
+  );
+  deepEq(markers(md), ['•', '◦', '◦', '•'], '子层没换标记符号 —— 光有缩进不够直观');
+});
+
+test('缩进宽度 → 层级：2 空格一级、tab 记 4 格、超过 3 级封顶', () => {
+  deepEq(levels('- a\n  - b\n    - c\n      - d\n        - e'), [0, 1, 2, 3, 3], '层级换算不对');
+  deepEq(levels('- a\n\t- b'), [0, 2], 'tab 缩进没按 4 格算');
+});
+
+test('任务框：`[ ]` / `[x]` / `[X]` 三态，且文本里不再残留那对方括号', () => {
+  const md = '- [ ] 未完成\n- [x] 已完成\n- [X] 也算完成';
+  deepEq(
+    items(md).map((it) => it.checked),
+    [false, true, true],
+    '任务框的勾选态识别不对'
+  );
+  deepEq(
+    items(md).map((it) => it.text),
+    ['未完成', '已完成', '也算完成'],
+    '文本里还残留着 `[ ]` / `[x]` —— 用户看到的就是这些括号'
+  );
+  deepEq(markers(md), ['•', '•', '•'], '对照：非任务项仍是圆点标记（由模板决定画框还是画点）');
+});
+
+test('`[y]`、`[ ]` 后面没有内容的写法不当任务框（别把普通文本吃掉）', () => {
+  eq(items('- [y] 不是任务框')[0].checked, null, '`[y]` 被当成了任务框');
+  eq(items('- [y] 不是任务框')[0].text, '[y] 不是任务框', '普通文本被吞掉了');
+  eq(items('- [x]没有空格')[0].checked, null, '`[x]` 后面没有空白也被当成了任务框');
+});
+
+test('有序列表：起始编号按原文（`3.` 起就是 3.），子层各记各的计数器', () => {
+  deepEq(markers('3. 第三项\n4. 第四项'), ['3.', '4.'], '起始编号被强行当成 1 —— 接在上一段后面的编号会全错');
+  deepEq(
+    markers('1. 甲\n  - 甲1\n  - 甲2\n2. 乙'),
+    ['1.', '1.', '2.', '2.'],
+    '子层的编号没有独立计数（或外层被内层带跑了）'
+  );
+  deepEq(
+    markers('1. 甲\n  1. 甲1\n  2. 甲2\n2. 乙'),
+    ['1.', '1.', '2.', '2.'],
+    '子层写死了编号时不该再自增'
+  );
+});
+
+test('松散列表：空行不另起一个列表，编号必须连续往下走', () => {
+  const bs = blocks('1. 甲\n\n2. 乙');
+  eq(bs.length, 1, '空行把有序列表拆成了两个 —— 第二个列表又从 1 开始编号');
+  deepEq(markers('1. 甲\n\n2. 乙'), ['1.', '2.'], '编号没有连续');
+  eq(blocks('- 甲\n\n- 乙').length, 1, '无序列表也被空行拆开了');
+});
+
+test('不同类型的列表不会被粘成一个（空行之后换成有序，就该另起一块）', () => {
+  const bs = blocks('- 甲\n- 乙\n\n1. 丙');
+  eq(bs.length, 2, '无序与有序被合并成了同一个列表');
+  eq(bs[0].ordered, false);
+  eq(bs[1].ordered, true);
+  deepEq(markers('1. 甲\n\n2. 乙\n\n- 丙'), ['1.', '2.', '•'], '交替类型时标记错乱');
+});
+
+test('围栏代码块里的 `- 项` 不产生列表；单独一行的 `-` 也不是列表项', () => {
+  deepEq(types(blocks('```\n- 甲\n- 乙\n```')), ['code'], '代码块里的内容被解析成了列表');
+  const bs = blocks('上面的\n\n-\n');
+  ok(
+    bs.every((b) => b.type !== 'list'),
+    '单独一行的 `-` 被当成了列表项 —— 列表标记后面必须有空白（否则 `---` 之类会先被别的规则吃掉）'
+  );
+  eq(bs[1].text, '-', '单独一行的 `-` 应当原样作为段落文本');
+});
+
+test('模板：`itemIndent` 挂上了，且勾选框与标记是二选一（不许两个都画）', () => {
+  const src = fs.readFileSync(FILE, 'utf8');
+  const tpl = src.slice(0, src.indexOf('</template>'));
+  ok(tpl.includes('itemIndent(item)'), '列表项没有挂层级缩进 —— 解析出了层级却不用，等于没做');
+  ok(/v-if="item\.checked !== null/.test(tpl), '模板没有按 checked 决定画勾选框');
+  /* 「画标记的那个元素必须是 v-else」：按 liMarker( 的位置往前找它所属的标签，
+     在标签内部找 v-else。不这么找的话，「同一行里出现过 v-else 与 liMarker(」也能骗过断言。 */
+  const at = tpl.indexOf('liMarker(');
+  ok(at > -1, '模板里找不到 liMarker —— 标记渲染点没了');
+  const open = tpl.lastIndexOf('<', at);
+  const tag = tpl.slice(open, at);
+  ok(
+    /v-else/.test(tag),
+    '画标记的那个元素不是 v-else —— 它与勾选框会同时出现在一行（两个都画）'
+  );
+
+  /* 样式断言走**编译产物**而不是源码形态：`&__task--done` 与嵌在 `&__task` 里的 `&--done`
+     编译出来是同一个选择器，按源码字符串判会误伤其中一种写法。 */
+  const css = compileStyle();
+  ok(/\.vui-markdown__task\s*\{/.test(css), '编译后的 CSS 里没有 .vui-markdown__task —— 勾选框没有可见的形状');
+  ok(
+    /\.vui-markdown__task--done/.test(css),
+    '编译后的 CSS 里没有 .vui-markdown__task--done —— 勾选与未勾选长得一样'
+  );
 });
 
 // ── 汇总 ──────────────────────────────────────────────────────────────────

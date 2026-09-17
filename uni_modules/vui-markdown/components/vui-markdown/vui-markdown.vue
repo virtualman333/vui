@@ -23,10 +23,22 @@
 				</text>
 			</view>
 
-			<!-- 列表 -->
+			<!-- 列表：缩进层级 / 任务框 / 有序编号 -->
 			<view v-else-if="block.type === 'list'" class="vui-markdown__list">
-				<view v-for="(item, li) in block.items" :key="li" class="vui-markdown__li">
-					<text class="vui-markdown__li-marker">{{ block.ordered ? li + 1 + '.' : '•' }}</text>
+				<view
+					v-for="(item, li) in block.items"
+					:key="li"
+					class="vui-markdown__li"
+					:style="itemIndent(item)"
+				>
+					<view
+						v-if="item.checked !== null && item.checked !== undefined"
+						class="vui-markdown__task"
+						:class="{ 'vui-markdown__task--done': item.checked }"
+					>
+						<text v-if="item.checked" class="vui-markdown__task-tick">✓</text>
+					</view>
+					<text v-else class="vui-markdown__li-marker">{{ liMarker(block, item, li) }}</text>
 					<text class="vui-markdown__li-text" :selectable="selectable">
 						<text v-for="(seg, si) in item.segments" :key="si" :class="segClass(seg)" @click="onSegTap(seg)">{{ seg.text }}</text>
 					</text>
@@ -84,6 +96,8 @@
 /**
  * 轻量 Markdown 渲染
  * @description 渲染常用 Markdown 语法（标题/段落/列表/引用/代码块/表格/分隔线 + 粗体/斜体/行内代码/链接）。
+ * 列表支持**缩进层级**（2 空格一级，最多 3 级，子层换标记符号）、**任务框**（`- [ ]` / `- [x]`）
+ * 与**有序列表的起始编号**，空行分隔的同类列表项视为同一个列表（编号连续，不各起一个）。
  * 不使用 v-html，全部通过结构化节点渲染，因此在小程序端同样可用。
  * @property {String} content Markdown 源文本
  * @property {Boolean} selectable 文字是否可选中
@@ -130,7 +144,14 @@ export default {
 				} else if (b.type === 'list') {
 					const items = [];
 					for (let j = 0; j < b.items.length; j++) {
-						items.push({ segments: this.parseInline(b.items[j]) });
+						const it = b.items[j];
+						items.push({
+							segments: this.parseInline(it.text),
+							text: it.text,
+							level: it.level,
+							num: it.num,
+							checked: it.checked
+						});
 					}
 					out.push({ type: 'list', ordered: b.ordered, items });
 				} else if (b.type === 'table') {
@@ -157,6 +178,47 @@ export default {
 		}
 	},
 	methods: {
+		/**
+		 * 列表项识别：`<缩进><标记><空白><内容>` → `{ indent, marker, ordered, num, text }`；
+		 * 不是列表项时返回 null。
+		 *
+		 * 为什么收敛成一个方法：这段正则在「进入列表」「逐项收集」「空行之后还是不是这个列表」
+		 * 三处都要跑，抄成三份必然漂移（本仓反复踩过的坑）。只有一份，「什么算列表项」就只有一处定义。
+		 */
+		listItem(line) {
+			const m = /^([ \t]*)([-*+]|\d+[.)])([ \t]+)(.*)$/.exec(line);
+			if (!m) return null;
+			const ordered = /\d/.test(m[2].charAt(0));
+			return {
+				indent: m[1],
+				marker: m[2],
+				ordered,
+				num: ordered ? parseInt(m[2], 10) : null,
+				text: m[4]
+			};
+		},
+		/** 缩进宽度 → 层级（2 空格一级，tab 记 4 格，最多 3 级 —— 再深就该换组件了） */
+		listLevel(indent) {
+			let w = 0;
+			for (let i = 0; i < indent.length; i++) {
+				w += indent.charAt(i) === '\t' ? 4 : 1;
+			}
+			return Math.min(3, Math.floor(w / 2));
+		},
+		/** 列表项的缩进（层级靠 padding 表达，不靠标记符号的宽度） */
+		itemIndent(item) {
+			const lv = item && item.level ? item.level : 0;
+			return lv ? 'padding-left:' + lv * 32 + 'rpx;' : '';
+		},
+		/** 列表项前面的标记：有序用数字，无序按层级换符号（子层一眼看得出从属关系） */
+		liMarker(block, item, li) {
+			if (block && block.ordered) {
+				const n = item && item.num ? item.num : li + 1;
+				return n + '.';
+			}
+			const lv = item && item.level ? item.level : 0;
+			return lv === 0 ? '•' : lv === 1 ? '◦' : '▪';
+		},
 		/** 块级解析：把 Markdown 源文本切成块数组 */
 		parseBlocks(src) {
 			const text = src === null || src === undefined ? '' : String(src);
@@ -240,16 +302,43 @@ export default {
 					continue;
 				}
 
-				/* 列表 */
-				m = /^\s*([-*+]|\d+[.)])\s+(.*)$/.exec(line);
+				/* 列表（支持缩进层级、任务框、空行分隔的松散列表） */
+				m = this.listItem(line);
 				if (m) {
 					flush();
-					const ordered = /\d/.test(m[1].charAt(0));
+					const ordered = m.ordered;
 					const items = [];
+					/* 每个层级各记一个计数器：有序列表的数字在层级之间不该互相干扰 */
+					const counters = [];
 					while (i < lines.length) {
-						const lm = /^\s*([-*+]|\d+[.)])\s+(.*)$/.exec(lines[i]);
-						if (!lm) break;
-						items.push(lm[2]);
+						const lm = this.listItem(lines[i]);
+						if (!lm) {
+							/* 松散列表：空行之后仍跟**同类型**的列表项，属同一个列表
+							   （CommonMark 里空行只让列表变松散，不另起一个列表）。
+							   否则 `1. 甲` 空行 `2. 乙` 会被拆成两个列表、各自从 1 开始编号。 */
+							const nx = i + 1 < lines.length ? this.listItem(lines[i + 1]) : null;
+							if (/^\s*$/.test(lines[i]) && nx && nx.ordered === ordered) {
+								i++;
+								continue;
+							}
+							break;
+						}
+						const level = this.listLevel(lm.indent);
+						let text = lm.text;
+						let checked = null;
+						/* 任务框：`- [ ] 待办` / `- [x] 已完成` —— 把原文那对括号直接吐给用户是这类
+						   语料下最常见的难看之处（模型输出的待办清单几乎都长这样） */
+						const tk = /^\[([ xX])\][ \t]+(.*)$/.exec(text);
+						if (tk) {
+							checked = tk[1] !== ' ';
+							text = tk[2];
+						}
+						let num = null;
+						if (ordered) {
+							num = lm.num === null ? (counters[level] || 0) + 1 : lm.num;
+							counters[level] = num;
+						}
+						items.push({ text, level, num, checked });
 						i++;
 					}
 					blocks.push({ type: 'list', ordered, items });
@@ -614,6 +703,32 @@ $vui-code-color: #abb2bf !default;
 		font-size: 28rpx;
 		line-height: 1.7;
 		color: $vui-text-color-secondary;
+	}
+
+	/* 任务框：与 li-marker 同宽同高，保证勾选框与文字左边缘对齐 */
+	&__task {
+		flex-shrink: 0;
+		box-sizing: border-box;
+		width: 26rpx;
+		height: 26rpx;
+		margin: 11rpx 6rpx 0 0;
+		border: 1px solid $vui-border-color;
+		border-radius: 6rpx;
+		/* 未勾选：保持空框即可（不写颜色，跟着主题走） */
+		background-color: $vui-bg-color;
+
+		&--done {
+			border-color: $vui-primary;
+			background-color: $vui-primary;
+		}
+	}
+
+	&__task-tick {
+		display: block;
+		font-size: 20rpx;
+		line-height: 24rpx;
+		text-align: center;
+		color: $vui-text-color-inverse;
 	}
 
 	&__li-text {
