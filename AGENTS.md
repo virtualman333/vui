@@ -143,7 +143,7 @@ npm run check:template
 ```
 
 它只做一件事：模板里用到的标识符，在整个 `<script>` 中不存在 → 报错；模块级常量被模板引用 → 报错。
-该检查已并入 `prepublish-check`，发布前会自动拦截。
+该检查已并入 `prepublish-check`（`npm run check`），并且作为独立一环进了 `check:all`，发布前会自动拦截。
 
 ---
 
@@ -176,8 +176,16 @@ npm run check:template
 
 发布前必须全部通过。**清单的唯一来源是 `npm run check:all`**——`release.js` 第 1 步、生成后复校、以及 `prepublishOnly` 都调它，不要再在别处手写一份清单（两处写法必然漂移）。
 
+**`check:all` 的清单由 `package.json` 现算，本文件里那份只是给人看的说明**（`scripts/check-all.js` 读 `scripts` 段里所有 `check` / `check:*` 入口，按声明顺序依次运行）。所以：
+
+- **新增一条检查 = 在 `package.json` 里加一条 `check:xxx` 入口**，它自动就在链上，不需要记任何事；
+- 反方向也锁着：`scripts/check-*.js` 必须有对应入口，否则在链上判失败——「脚本写了但没人调它」是另一种静默失效；
+- 解析不出来 / 跑不起来的入口一律**失败而不是跳过**，并带一条「清单不少于 12 条」的不变量，防止枚举失灵时在**空集上全绿**；
+- `scripts/check-all.js` 每次运行都会先无条件跑一遍 `plan()` 的自证：四类坏输入（无入口的 `check-*.js`、非 `node scripts/xxx.js` 形态的入口值、指向不存在文件的入口、清单骤减）必须被判出，同一批输入正常时必须判绿。
+
 ```bash
 npm run check:all   # 全部跑（发布链用的就是这条）
+npm run check       # 只跑 prepublish-check（结构 / 路径规范 / 类型覆盖 / 模板作用域）
 npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已含）
 ```
 
@@ -185,7 +193,7 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 
 | 命令 | 查什么 |
 |------|--------|
-| `npm run check` | 结构 / 路径规范 / 类型覆盖 / 模板作用域（`prepublish-check.js`，内含 ⑦） |
+| `npm run check` | 结构 / 路径规范 / 类型覆盖 / 模板作用域（`prepublish-check.js`，内含 `check:template` 的作用域校验） |
 | `npm run check:sfc` | 用 `@vue/compiler-sfc` + `sass` 对全部 `.vue` 做 parse / 编译 script / 编译 template / SCSS 编译 |
 | `npm run check:entry` | 把 `index.js` 复制为 `.mjs` 后 `node --check`（入口语法 + 是否有 default 导出） |
 | `npm run check:types` | `tsc --noEmit` 检查 `types/index.d.ts`（自建 `vue` 模块 stub，`moduleResolution: bundler`；`skipLibCheck` 必须为 false，否则等于没查） |
@@ -194,7 +202,7 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 | `npm run check:theme` | 扫描全部组件的 `<style lang="scss">`：硬编码色值（第五节禁止）、缺主题兜底块、以及基线白名单是否失效 |
 | `npm run check:rules` | 执行第二节红线与第四节写法约定里可静态判定的几条：`v-html`、`<script setup>`、Vue2 的 `model:` 选项、跨 uni_modules import、用了 `$emit` 却没声明 `emits`、缺首块 JSDoc、`.npmrc` 是否被 git 跟踪或被忽略 |
 | `npm run check:release` | `release.js` 第 0 步发布前置检查的自检：注入假环境跑一遍四类拦截（凭证不可用 / registry 已有该版本 / 本地 tag 已存在 / `.npmrc` 未被忽略），外加三条结构锁（`preflight` 必须在任何写入之前被调用、旧的「只看 `.npmrc` 文件是否存在」判据不得复活） |
-| `npm run check:template` | 仅模板作用域（`check:all` 已含，留作单独排查） |
+| `npm run check:template` | 仅模板作用域（`check` 里也调了一遍，这里留作单独排查与兜底） |
 | `npm run check:components` | 组件枚举与结构检查的自检：在仓库副本里注入「`.vue` 名字写错」「缺 `components/` 目录」两种坏结构，`prepublish-check` 必须拦下并点名；外加两条结构锁（组件枚举只有一份、组件数 == `.vue` 数） |
 | `npm run check:markdown` | vui-markdown 解析器的**行为测试**（唯一一条真的执行组件代码的检查）：用 `@vue/compiler-sfc` 取出 `<script>` 求值出组件选项，逐个断言表格识别 / 列数补齐 / 对齐标记 / `\|` 转义 / 普通文本不得被误判 / 围栏优先级，外加「模板里的表格必须在 `scroll-view scroll-x` 里」的结构锁 |
 | `npm run check:category` | `gen-docs.py` 的 `CATEGORY` 白名单不变量：每个组件**恰好登记一次**（同一分类内写两遍、或跨分类重复，一律失败）、与 `uni_modules/` 双向覆盖、id 命名规范、解析失败即失败；解析器在 `scripts/lib/category.js`（与 `check-gen` 共用同一份） |
@@ -208,7 +216,7 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 
 `check:all` 全部是静态校验，**不依赖 HBuilderX**。本机已装 HBuilderX（`D:\Program Files\HBuilderX`，可直接复用它自带的 node + vite 构建 H5 产物做浏览器实跑），但校验链必须能在没装的机器上跑，所以不把它接进 `check:all`；由于至今**没有任何一轮做过 H5 / 真机实跑**，改组件后仍必须在提交信息里说明未做实跑验证。
 
-`check:release` 补的是**发布链自身**的盲区：`check:all` 里的其余八条都在看「要发出去的东西对不对」，没有一条看「这台机器现在发不发得出去」。而 `release.js` 的第 3~5 步（改版本号 → commit + tag → push）**不可回退**，tag 一推版本号就被占住。此前第 0 步只判断 `.npmrc` 文件**存不存在**——「文件存在」与「凭证可用」是两件事，一个只写了 registry 换源配置的 `~/.npmrc` 就能骗过它，于是脚本走完 bump → commit → tag → push 才倒在 `npm publish`，留下第一节明令禁止的「版本已升、包没发」，而且下次再跑会跳到下一个版本号。第 0 步因此改为实探（`npm whoami` + 目标版本是否已被 registry 占用 + 本地 tag 是否已存在），改法见 `scripts/release-preflight.js`，自检见 `scripts/check-release.js`。自检里的用案例「只有 registry 配置的 `~/.npmrc`」就是为这个漏洞写的：它必须红。
+`check:release` 补的是**发布链自身**的盲区：`check:all` 里的其余各条都在看「要发出去的东西对不对」，没有一条看「这台机器现在发不发得出去」。而 `release.js` 的第 3~5 步（改版本号 → commit + tag → push）**不可回退**，tag 一推版本号就被占住。此前第 0 步只判断 `.npmrc` 文件**存不存在**——「文件存在」与「凭证可用」是两件事，一个只写了 registry 换源配置的 `~/.npmrc` 就能骗过它，于是脚本走完 bump → commit → tag → push 才倒在 `npm publish`，留下第一节明令禁止的「版本已升、包没发」，而且下次再跑会跳到下一个版本号。第 0 步因此改为实探（`npm whoami` + 目标版本是否已被 registry 占用 + 本地 tag 是否已存在），改法见 `scripts/release-preflight.js`，自检见 `scripts/check-release.js`。自检里的用案例「只有 registry 配置的 `~/.npmrc`」就是为这个漏洞写的：它必须红。
 
 `check:components` 补的是**枚举自身**的盲区：`check:all` 里其余脚本都要先回答「有哪些组件」，而这个答案此前在 6 个脚本里各算了一遍、语义有三种（只看目录名 / 目录名 + 同名 `.vue` / 所有 `.vue` 文件）。其中「目录名 + 同名 `.vue`」那种写法（`prepublish-check` 与 `check-sfc` 都用过）**会把结构坏掉的组件从集合里静默丢弃**：实测在副本里放一个 `components/vui-probe/index.vue`（名字写错），`prepublish-check` 照样打印「校验通过，可以发布」，而它自己下一行还打印着「模板已查: 49 个组件」——两个数字互相矛盾却没人管；后果就是第三节那条红灯变成绿灯。现在枚举收敛到 `scripts/lib/components.js`（`listComponents()` 永不静默丢弃），`check:components` 用子进程真跑一遍来证明它确实还拦得住，并锁死「枚举只有一份」。
 - `check:markdown` 补的是**另一类盲区：没人跑过组件的代码**。上面所有检查看的都是「文件长什么样」——语法、主题变量、产物一致性、tarball 清单、组件枚举——它们可以全绿，而组件渲染出来的东西是错的。vui-markdown 的解析器是纯函数（不碰 DOM、不碰 `uni`、不需要渲染），恰恰最好测，却从建立起一次都没被执行过：它把 Markdown 表格整段吞成普通段落，用户看到的是满屏 `| 模型 | 分数 |` 原文，而十道检查全部通过。表格是模型输出里最常见的一种结构。该脚本用 `@vue/compiler-sfc` 取 `<script>` 块求值出组件选项（不手写正则切字符串——正文里出现 `</script>` 之类就会骗过手写解析器），再组装最小 `this` 直接调 `computed.blocks`；并对「表格必须渲染在 `scroll-view scroll-x` 里」上结构锁——窄屏上宽表撑破整页是移动端最难查的一类故障。同一类缺口后来又在**行内链接 / 图片**上出现了一次（`[文本](地址)` 也被原样吐给用户，链接是模型输出里仅次于表格的常见结构），所以该脚本现在同时覆盖这两组，并带一条**计数不变量**：模板里渲染片段的位置数与挂点击入口的位置数必须相等（只断言「出现过点击入口」是不够的——挂一处也算出现过）。

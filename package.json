@@ -65,8 +65,8 @@
   ],
   "scripts": {
     "release": "node scripts/release.js",
-    "check": "npm run check:all",
-    "check:all": "node scripts/prepublish-check.js && node scripts/check-sfc.js && node scripts/check-theme.js && node scripts/check-rules.js && node scripts/check-entry.js && node scripts/check-types.js && node scripts/check-gen.js && node scripts/check-pack.js && node scripts/check-release.js && node scripts/check-components.js && node scripts/check-category.js && node scripts/check-markdown.js",
+    "check": "node scripts/prepublish-check.js",
+    "check:all": "node scripts/check-all.js",
     "check:template": "node scripts/check-template-refs.js",
     "check:sfc": "node scripts/check-sfc.js",
     "check:theme": "node scripts/check-theme.js",

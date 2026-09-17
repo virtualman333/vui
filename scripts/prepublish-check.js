@@ -10,6 +10,7 @@
  *   5. 必备文件（README.md / LICENSE / docs/API.md）存在
  *   6. package.json 的 files 字段包含 uni_modules/
  *   7. 模板作用域（模板引用了不存在或不可访问的标识符）
+ *   8. 校验链的清单必须是**派生式**的（`check:all` → `scripts/check-all.js`）
  *
  * 任一项失败则以非 0 退出码终止发布。
  */
@@ -139,6 +140,32 @@ if (vueCount !== comps.length) {
     `组件枚举与 uni_modules 下的 .vue 数量不一致：组件 ${comps.length} 个、.vue 文件 ${vueCount} 个。` +
       '一个组件恰好一个入口 .vue；不一致说明有组件的目录结构坏了，或存在游离的 .vue 文件。'
   );
+}
+
+// 8. 校验链的清单必须是派生式的
+// 这条自证刻意放在这里、而不是放在 `scripts/check-all.js` 里面 —— **守卫不能住在被守卫的
+// 东西里**：有人把 `check:all` 改回手写的 `&&` 串时，`check-all.js` 根本不会被调用，
+// 它内部那套自证（含「清单不少于 12 条」的不变量）也就无从运行，于是发布链会在
+// 少跑若干条检查的情况下打印「全绿」。而 `prepublish-check` 是任何形态的链都会跑到的一环。
+//
+// 为什么手写链一定漂移：AGENTS.md 第八节写着「不要再在别处手写一份清单」，但手写链与
+// `check:*` 独立入口本来就是同一件事的两份写法 —— 新加一条检查时忘了接进链里，
+// 没有任何东西会报错。这件事真实发生过：`check:sfc` 建立后长期没进发布链（第 2 轮才补上）。
+{
+  const pkgRaw = readIfExists(path.join(root, 'package.json'));
+  let chain = null;
+  try {
+    chain = String((JSON.parse(pkgRaw || '{}').scripts || {})['check:all'] || '').trim();
+  } catch (e) {
+    chain = null;
+  }
+  if (chain !== 'node scripts/check-all.js') {
+    errors.push(
+      `\`check:all\` 不再是派生式入口（实际：${JSON.stringify(chain)}）。` +
+        '它必须指向 `scripts/check-all.js`，由该脚本从 package.json 现算清单；' +
+        '手写 `&&` 串与 `check:*` 入口是同一件事的两份写法，必然漂移（见 AGENTS.md 第八节）。'
+    );
+  }
 }
 
 // 输出
