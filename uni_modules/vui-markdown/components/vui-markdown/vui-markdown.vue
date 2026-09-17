@@ -418,9 +418,9 @@ export default {
 			return blocks;
 		},
 		/**
-		 * 行内解析：行内代码 / 链接 / 图片 / 粗体 / 斜体
+		 * 行内解析：行内代码 / 链接 / 图片 / 粗体 / 斜体 / 粗斜体
 		 *
-		 * 三个容易踩的点：
+		 * 四个容易踩的点：
 		 *  ① **一次扫描，不逐轮 replace**。分轮替换会让前一轮产出的文本被后一轮再解析一遍，
 		 *     典型后果是「代码里的 `[a](b)` 变成链接」「链接文字里的 `*` 变成斜体」。
 		 *     这里用一条正则按出现位置切，**行内代码排在首位**，于是 `` `[a](b)` `` 只会是代码。
@@ -429,11 +429,19 @@ export default {
 		 *  ③ **加粗里的链接要再走一遍**：`**[文档](url)**` 是模型输出的常客，而单遍扫描
 		 *     不会回头解析 `**...**` 里面 —— 那就等于把原文 `[文档](url)` 直接给用户看。
 		 *     所以命中外层强调 token 时，若内部还含行内语法，就递归一次并给片段打上修饰标记。
+		 *  ④ **三重定界符要单独有一条备选**（`***` / `___` 与 `**` / `__` 并列）。
+		 *     `***重点***` 是模型输出的常客，而它此前既匹配不上 `\*\*[^*]+\*\*`
+		 *     （第二个字符就是 `*`，`[^*]+` 直接失败），也匹配不上 `\*[^*\n]+\*`；
+		 *     正则于是**从第二个字符起**才匹配上 `**重点**`，多出来的那个 `*`
+		 *     作为普通文本吐给用户 —— 实际渲染成 `*重点*`。两种写法（`***` / `___`）都会漏。
+		 *     ⚠ 真正起作用的是「这条备选**存在**」，**不是备选之间的顺序**：三重那条要求
+		 *     紧跟三个 `*`、双写那条要求第三个字符不是 `*`，两者在任一位置上互斥，
+		 *     换序实测结果完全一致（第一版注释写成「顺序颠倒就退回旧行为」，已被注入实测推翻）。
 		 */
 		parseInline(text) {
 			const segs = [];
 			const src = text === null || text === undefined ? '' : String(text);
-			const re = /(`[^`]+`|!\[[^\]]*\]\([^)\s]+\)|\[[^\]]*\]\([^)\s]+\)|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_)/g;
+			const re = /(`[^`]+`|!\[[^\]]*\]\([^)\s]+\)|\[[^\]]*\]\([^)\s]+\)|\*\*\*[^*]+\*\*\*|___[^_]+___|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_)/g;
 			let last = 0;
 			let m;
 			while ((m = re.exec(src)) !== null) {
@@ -444,6 +452,11 @@ export default {
 				const link = this.parseLinkToken(token);
 				if (link) {
 					segs.push(link);
+				} else if (token.indexOf('***') === 0 || token.indexOf('___') === 0) {
+					/* 三重定界符 = 加粗 + 斜体。分支排在双写之前只是可读性上的写法，
+					   没有语义依赖：`***x***` 即便落到双写分支，`slice(2,-2)` 拿到的是
+					   `*x*`，递归后仍是「斜体 + 加粗标记」两层修饰，结果一致（实测过）。 */
+					segs.push.apply(segs, this.emphasize(token.slice(3, -3), ['bold', 'italic']));
 				} else if (token.indexOf('**') === 0 || token.indexOf('__') === 0) {
 					segs.push.apply(segs, this.emphasize(token.slice(2, -2), 'bold'));
 				} else if (token.charAt(0) === '`') {
@@ -480,14 +493,22 @@ export default {
 		/**
 		 * 给一段强调文本产片段：里面没有别的行内语法时保持原来的单片段形态
 		 * （`**重点**` 仍是 `{type:'bold'}`），含链接等才展开并打上 `bold` / `italic` 标记。
+		 *
+		 * `kind` 可以是单个修饰名，也可以是数组（三重定界符 = 加粗 + 斜体）。
+		 * 单修饰仍走「单片段 + 专属 type」那条快路径（模板按 type 上样式类）；
+		 * 多修饰时统一走「保留内部片段类型、另打 bold / italic 标记」那条，
+		 * 于是 `*****` 内的链接 / 行内代码也照样能带上两层修饰（见 segClass）。
 		 */
 		emphasize(inner, kind) {
+			const flags = Array.isArray(kind) ? kind : [kind];
 			const nested = this.parseInline(inner);
-			if (nested.length === 1 && nested[0].type === 'text') {
-				return [{ type: kind, text: inner }];
+			if (nested.length === 1 && nested[0].type === 'text' && flags.length === 1) {
+				return [{ type: flags[0], text: inner }];
 			}
 			const flag = {};
-			flag[kind] = true;
+			flags.forEach((k) => {
+				flag[k] = true;
+			});
 			return nested.map((s) => Object.assign({}, s, flag));
 		},
 		/** 行内片段对应的样式类（类型 + 强调修饰标记） */

@@ -632,6 +632,93 @@ test('嵌套列表仍然只认层级：子项不会被上一项的续行吃掉',
   eq(bs[0].items[0].text, '一级 A\n一级 A 的续行', '续行没接在第一个一级项上');
 });
 
+// ── 11. 粗斜体（三重定界符） ───────────────────────────────────────────────
+
+/**
+ * `***重点***` 此前会**漏出一个多余的星号**。
+ *
+ * 原因在行内正则的备选顺序：`***重点***` 匹配不上 `\*\*[^*]+\*\*`
+ * （`**` 之后紧接着就是 `*`，`[^*]+` 直接失败），也匹配不上 `\*[^*\n]+\*`
+ * （同理）。正则于是**从第二个星号起**才匹配上 `**重点**`，多出来的那个 `*`
+ * 作为普通文本片段吐给用户 —— 界面上看到的是 `*重点*`。`___重点___` 漏下划线同理。
+ *
+ * 这类故障与「表格被吞成普通段落」「链接原样吐出」是同一族：**不报错，只在用户那里现形**。
+ * 而 `***` 恰恰是模型强调重点时最常用的写法。
+ */
+test('`***重点***` → 单片段，带 bold + italic 两层修饰', () => {
+  deepEq(segsOf('***重点***'), [{ type: 'text', text: '重点', bold: true, italic: true }]);
+});
+
+test('`___重点___` 同样（下划线写法）', () => {
+  deepEq(segsOf('___重点___'), [{ type: 'text', text: '重点', bold: true, italic: true }]);
+});
+
+test('混排 `**粗** *斜* ***粗斜*** ___粗斜___` 各归各位，一个定界符都不许漏', () => {
+  /* 按「改坏它」写的：把三重那条备选从正则里删掉，这里立刻红（实测 3 条红）。
+     ⚠ 但它**不是**「备选顺序」的锁：把 `***…***` 与 `**…**` 换序是等价改写，
+     实测一项都不红 —— 两条备选在任一位置上互斥，顺序不影响结果。 */
+  deepEq(segsOf('**粗** *斜* ***粗斜*** ___粗斜___'), [
+    { type: 'bold', text: '粗' },
+    { type: 'text', text: ' ' },
+    { type: 'italic', text: '斜' },
+    { type: 'text', text: ' ' },
+    { type: 'text', text: '粗斜', bold: true, italic: true },
+    { type: 'text', text: ' ' },
+    { type: 'text', text: '粗斜', bold: true, italic: true }
+  ]);
+});
+
+test('残留字符的通用不变量：这批输入渲染出的文本里不许出现 `*` / `_`', () => {
+  const cases = [
+    '***重点***',
+    '___重点___',
+    '前 ***重点*** 后',
+    '***[文档](https://a.com)***',
+    '***`npm i`***',
+    '- 列表项里的 ***重点***',
+    '> 引用里的 ***重点***',
+    '| ***重点*** |\n| --- |\n| a |',
+    '## ***重点***'
+  ];
+  for (const md of cases) {
+    const grab = (bs) =>
+      bs
+        .flatMap((b) =>
+          b.type === 'table'
+            ? [...b.header, ...b.rows.flat()].map((c) => c.segments)
+            : b.type === 'list'
+              ? b.items.map((i) => i.segments)
+              : [b.segments || []]
+        )
+        .flat()
+        .map((s) => (s && s.text) || '')
+        .join('');
+    const txt = grab(blocks(md));
+    ok(!/[*_]/.test(txt), `「${md}」渲染出了残留定界符：${JSON.stringify(txt)}`);
+  }
+});
+
+test('三重里的链接 / 行内代码保留原片段类型，并带上两层修饰', () => {
+  const a = segsOf('***[文档](https://a.com)***')[0];
+  eq(a.type, 'link', '三重里的链接丢了片段类型');
+  eq(a.url, 'https://a.com');
+  ok(a.bold === true && a.italic === true, '三重里的链接没带上两层修饰');
+
+  const b = segsOf('***`npm i`***')[0];
+  eq(b.type, 'code', '三重里的行内代码丢了片段类型');
+  ok(b.bold === true && b.italic === true, '三重里的行内代码没带上两层修饰');
+});
+
+test('两层修饰都落到样式类上，且两个类在样式块里真有定义', () => {
+  const cls = opts.methods.segClass({ type: 'text', text: '重点', bold: true, italic: true });
+  ok(cls.includes('vui-markdown__bold') && cls.includes('vui-markdown__italic'),
+    `两层修饰没同时落到类上：${JSON.stringify(cls)}`);
+  // 类名拼出来是空的没用，必须在编译后的 CSS 里真有形状
+  const css = compileStyle();
+  ok(/\.vui-markdown__bold\b/.test(css), '编译后的 CSS 里没有 .vui-markdown__bold');
+  ok(/\.vui-markdown__italic\b/.test(css), '编译后的 CSS 里没有 .vui-markdown__italic');
+});
+
 test('结构锁：块级标记**只有一份** —— 改掉它，主循环与续行判定会一起变', () => {
   /* 这条锁不读源码形态（那种断言会被一行注释或另一处等价写法骗过），而是**真的把
      MD_BLOCK.hr 改成永不匹配**再问两个调用方：
