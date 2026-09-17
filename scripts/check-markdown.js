@@ -34,6 +34,9 @@
  *      会把整页撑破 —— 这是移动端最难看的一类故障）
  *  10. 行内定界符的**两侧判据**：`user_name_count` 不许变成 `usernamecount`、
  *      `3 * 4 * 5` 不许变成 `3  4  5`（下划线 / 星号被当成强调定界符吃掉了）
+ *  11. 删除线 `~~x~~`（与强调共用同一套两侧判据；`~` 的定界符只能正好两个）
+ *  12. **行内形态的登记表与对账**（第 13 节）：组件那条行内正则的每条备选都必须
+ *      在这里登记，登记项还各自带一个探针 —— 见下面的 `INLINE_FORMS`
  *
  * 用法：
  *   npm run check:markdown
@@ -670,7 +673,7 @@ test('混排 `**粗** *斜* ***粗斜*** ___粗斜___` 各归各位，一个定�
   ]);
 });
 
-test('残留字符的通用不变量：这批输入渲染出的文本里不许出现 `*` / `_`', () => {
+test('残留字符的通用不变量：这批输入渲染出的文本里不许出现 `*` / `_` / `~`', () => {
   const cases = [
     '***重点***',
     '___重点___',
@@ -680,7 +683,15 @@ test('残留字符的通用不变量：这批输入渲染出的文本里不许�
     '- 列表项里的 ***重点***',
     '> 引用里的 ***重点***',
     '| ***重点*** |\n| --- |\n| a |',
-    '## ***重点***'
+    '## ***重点***',
+    '~~作废~~',
+    '前 ~~作废~~ 后',
+    '~~[文档](https://a.com)~~',
+    '~~`npm i`~~',
+    '- 列表项里的 ~~作废~~',
+    '> 引用里的 ~~作废~~',
+    '| ~~作废~~ |\n| --- |\n| a |',
+    '## ~~作废~~'
   ];
   for (const md of cases) {
     const grab = (bs) =>
@@ -696,7 +707,7 @@ test('残留字符的通用不变量：这批输入渲染出的文本里不许�
         .map((s) => (s && s.text) || '')
         .join('');
     const txt = grab(blocks(md));
-    ok(!/[*_]/.test(txt), `「${md}」渲染出了残留定界符：${JSON.stringify(txt)}`);
+    ok(!/[*_~]/.test(txt), `「${md}」渲染出了残留定界符：${JSON.stringify(txt)}`);
   }
 });
 
@@ -873,6 +884,267 @@ test('结构锁：两侧判据只有一份，且 parseInline 真的在用它', (
   /* 两个方向都钉住：规则**活在这一个方法里**（改它，两处行为一起变） */
   eq(grabWith(o, IN_WORD), '变量 usernamecount 在这里', '恒真之后词内下划线没被吃 —— 这条判据不在 delimiterOk 里');
   eq(grabWith(o, TIMES), '计算 3  4  5 的结果', '恒真之后乘号没被吃 —— 这条判据不在 delimiterOk 里');
+});
+
+// ── 13. 行内形态：登记表 + 两向对账 ───────────────────────────────────────
+//
+// 这一节回答的是一个**结构性**问题。组件里那条行内正则的每条备选都是一个「行内形态」，
+// 而在此之前，形态清单只活在「写一条就补一条测试」这个习惯里：
+//
+//   - 新加一条备选（`~~x~~` 就是本轮加的）不会有任何东西提醒你该补哪些断言；
+//   - 删掉一条也不会有东西提醒你组件 README 里那张表已经过期；
+//   - 解析出来了却没给样式类，用户看不出差别，而**上面所有行为断言照样全绿**。
+//
+// 做法沿用 AL 那条「宽扫 − 窄解析」+「双向登记表」：
+//   宽扫   = 从组件源码里**现算**那条正则的备选清单（刚才那份手抄的正则就是漂移源）；
+//   窄解析 = 本文件的 `INLINE_FORMS` 登记表；
+//   对账   = 两边一一对应（少一条、多一条、写错了都红）。
+// 每条登记项还必须带**探针**（真实输入）并声明它产出什么片段与样式类 ——
+// 「登记了却用不到」「解析出来了但样式没有」都要报，否则这张表会腐烂成摆设。
+
+const INLINE_FORMS = [
+  { name: '行内代码', frag: '`[^`]+`', probe: '先 `npm i` 后', segType: 'code', cls: ['vui-markdown__code-inline'] },
+  {
+    name: '图片',
+    frag: '!\\[[^\\]]*\\]\\([^)\\s]+\\)',
+    probe: '![架构图](https://x/y.png)',
+    segType: 'link',
+    cls: ['vui-markdown__link']
+  },
+  {
+    name: '链接',
+    frag: '\\[[^\\]]*\\]\\([^)\\s]+\\)',
+    probe: '[文档](https://a.com/b)',
+    segType: 'link',
+    cls: ['vui-markdown__link']
+  },
+  {
+    name: '删除线',
+    frag: '~~[^~\\n]+~~',
+    probe: '~~作废~~',
+    segType: 'strike',
+    cls: ['vui-markdown__strike']
+  },
+  {
+    name: '粗斜体（星号）',
+    frag: '\\*\\*\\*[^*]+\\*\\*\\*',
+    probe: '***重点***',
+    segType: 'text',
+    flags: ['bold', 'italic'],
+    cls: ['vui-markdown__bold', 'vui-markdown__italic']
+  },
+  {
+    name: '粗斜体（下划线）',
+    frag: '___[^_]+___',
+    probe: '___重点___',
+    segType: 'text',
+    flags: ['bold', 'italic'],
+    cls: ['vui-markdown__bold', 'vui-markdown__italic']
+  },
+  {
+    name: '粗体（星号）',
+    frag: '\\*\\*[^*]+\\*\\*',
+    probe: '**重点**',
+    segType: 'bold',
+    cls: ['vui-markdown__bold']
+  },
+  {
+    name: '粗体（下划线）',
+    frag: '__[^_]+__',
+    probe: '__重点__',
+    segType: 'bold',
+    cls: ['vui-markdown__bold']
+  },
+  {
+    name: '斜体（星号）',
+    frag: '\\*[^*\\n]+\\*',
+    probe: '*斜*',
+    segType: 'italic',
+    cls: ['vui-markdown__italic']
+  },
+  {
+    name: '斜体（下划线）',
+    frag: '_[^_\\n]+_',
+    probe: '_斜_',
+    segType: 'italic',
+    cls: ['vui-markdown__italic']
+  }
+];
+
+/**
+ * 从组件源码里切出 `parseInline` 那条行内正则的备选清单。
+ *
+ * 为什么不用一条正则去匹配它：正则字面量里既有 `[^)]` 这种字符类、又有 `\)` 这种转义，
+ * 「找下一个 `/`」会切在字符类或转义里。所以按字符走一遍：转义跳过、`[...]` 里不认 `/`，
+ * 出了字符类才认字面量的结束符。切备选时同一套规则排除字符类里的 `|`。
+ */
+function inlineAlternatives() {
+  const src = fs.readFileSync(FILE, 'utf8');
+  const head = 'const re = /';
+  const at = src.indexOf(head);
+  ok(at > -1, '组件源码里找不到 `const re = /` —— 行内正则被改名或挪走了，本节需要同步');
+  let body = '';
+  let inCls = false;
+  for (let i = at + head.length; i < src.length; i++) {
+    const c = src[i];
+    if (c === '\\') {
+      body += c + (src[i + 1] || '');
+      i++;
+      continue;
+    }
+    if (c === '[') inCls = true;
+    else if (c === ']') inCls = false;
+    else if (c === '/' && !inCls) break;
+    body += c;
+  }
+  ok(body.length > 0, '行内正则体是空的 —— 解析面塌了，两向对账会恒真');
+
+  /* 正则体若整个包在一层括号里（`/(a|b)/g`），先把这层去掉 —— 否则第一个备选会带着
+     开括号、最后一个带着闭括号，跟登记表永远对不上。用括号配对来判断「整层包裹」，
+     不去赌「以 ( 开头、以 ) 结尾」这种字面形状。 */
+  if (body.charAt(0) === '(') {
+    let depth = 0;
+    let inClass = false;
+    let closesAt = -1;
+    for (let i = 0; i < body.length; i++) {
+      const c = body[i];
+      if (c === '\\') {
+        i++;
+        continue;
+      }
+      if (c === '[') inClass = true;
+      else if (c === ']') inClass = false;
+      else if (!inClass && c === '(') depth++;
+      else if (!inClass && c === ')') {
+        depth--;
+        if (depth === 0) {
+          closesAt = i;
+          break;
+        }
+      }
+    }
+    ok(closesAt === body.length - 1, '行内正则体首尾的括号配不成一整层，无法剥掉');
+    body = body.slice(1, -1);
+  }
+
+  const out = [];
+  let cur = '';
+  inCls = false;
+  for (let k = 0; k < body.length; k++) {
+    const c = body[k];
+    if (c === '\\') {
+      cur += c + (body[k + 1] || '');
+      k++;
+      continue;
+    }
+    if (c === '[') inCls = true;
+    else if (c === ']') inCls = false;
+    if (c === '|' && !inCls) {
+      out.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += c;
+  }
+  out.push(cur);
+  return out.filter((s) => s.length);
+}
+
+let FORM_CSS = ''; // 由下一条测试填上，后面逐条形态的样式断言都基于它
+
+test('样式面可编译（逐条形态的「有样式」断言都基于它）', () => {
+  FORM_CSS = compileStyle();
+  ok(FORM_CSS.length > 0, '编译后的 CSS 是空的 —— 样式断言无从下手');
+});
+
+test('对账：行内正则的每条备选都在登记表里，反之亦然（少一条 / 多一条都红）', () => {
+  const alts = inlineAlternatives();
+  /* 解析面不许为空：塌了的话「两边都空」会让下面的集合相等恒真 */
+  ok(
+    alts.length >= 10,
+    `只从源码里切出 ${alts.length} 条备选（${alts.join(' | ')}）—— 解析面塌了，对账等于没做`
+  );
+  deepEq(
+    [...alts].sort(),
+    INLINE_FORMS.map((f) => f.frag).sort(),
+    '组件的行内正则与脚本里的 INLINE_FORMS 登记表对不上 —— 加/删行内形态必须同时改这两处'
+  );
+});
+
+test('登记表里没有重复项，也没有空探针（表本身要能自证）', () => {
+  const frags = INLINE_FORMS.map((f) => f.frag);
+  deepEq(frags.length, new Set(frags).size, '登记表里有重复的 frag');
+  const names = INLINE_FORMS.map((f) => f.name);
+  deepEq(names.length, new Set(names).size, '登记表里有重名的形态');
+  for (const f of INLINE_FORMS) {
+    ok(f.probe && f.probe.length, `形态「${f.name}」没有探针 —— 登记了却没有东西证明它真能用`);
+    ok(f.cls && f.cls.length, `形态「${f.name}」没声明样式类 —— 解析出来了用户也看不出差别`);
+  }
+});
+
+for (const f of INLINE_FORMS) {
+  test(`形态「${f.name}」：探针真渲染出声明的片段 + 样式类（且样式类在编译后的 CSS 里）`, () => {
+    const segs = segsOf(f.probe);
+    const seg = segs.find((s) => s.type === f.segType);
+    ok(seg, `「${f.probe}」没有渲染出 ${f.segType} 片段：${JSON.stringify(segs)}`);
+    for (const flag of f.flags || []) {
+      eq(seg[flag], true, `「${f.probe}」的 ${f.segType} 片段丢了 ${flag} 标记`);
+    }
+    const c = Object.assign({}, propsDefault, opts.data(), opts.methods);
+    const cls = String(opts.methods.segClass.call(c, seg));
+    for (const want of f.cls) {
+      ok(
+        cls.includes(want),
+        `「${f.probe}」的样式类里没有 ${want}（实际 ${JSON.stringify(cls)}）—— 解析出来了但用户看不出差别`
+      );
+      ok(FORM_CSS.includes('.' + want), `编译后的 CSS 里没有 .${want} —— 类名拼出来是空的`);
+    }
+  });
+}
+
+// ── 14. 删除线的边界（两侧判据与强调共用一套） ────────────────────────────
+
+test('删除线两侧紧邻空白时不成立（原文照收，一个字都不改）', () => {
+  const md = '这里 ~~ 不是删除线 ~~ 结束';
+  deepEq(segsOf(md), [{ type: 'text', text: md }], '带空格的波浪号被当成了删除线');
+});
+
+test('`~` 单写不是行内语法；连成一串的波浪号原样保留（不留孤零零的 `~` 残渣）', () => {
+  deepEq(segsOf('约 3 ~ 5'), [{ type: 'text', text: '约 3 ~ 5' }]);
+  deepEq(segsOf('~~~~'), [{ type: 'text', text: '~~~~' }]);
+  /* 正则只能从第二个 `~` 起匹配到中间那两个，若不拦就会渲染成 `~` + 删除线 + `~` ——
+     用户看到两个多出来的波浪号。判据在 delimiterOk 里（两端必须是一整对）。 */
+  deepEq(segsOf('~~~~作废~~~~'), [{ type: 'text', text: '~~~~作废~~~~' }], '连成一串的波浪号被吃掉了两个');
+  deepEq(segsOf('~~~作废~~~'), [{ type: 'text', text: '~~~作废~~~' }], '三个波浪号同样不该被当删除线');
+  eq(blocks('~~~\n代码块围栏\n~~~').length, 1, '波浪号围栏被拆成了别的块');
+});
+
+test('删除线里嵌行内语法：链接 / 行内代码保留原片段类型并带上 strike 标记', () => {
+  const a = segsOf('~~[文档](https://a.com)~~')[0];
+  eq(a.type, 'link', '删除线里的链接丢了片段类型');
+  eq(a.strike, true, '删除线里的链接没带上 strike 标记');
+  const b = segsOf('~~`npm i`~~')[0];
+  eq(b.type, 'code', '删除线里的行内代码丢了片段类型');
+  eq(b.strike, true, '删除线里的行内代码没带上 strike 标记');
+});
+
+test('删除线不吃掉邻近的普通文本（`a~~b~~c` 三段，且首尾一个字符都不丢）', () => {
+  const segs = segsOf('a~~b~~c');
+  eq(segs[0].text, 'a', '开头的普通文本被吃掉了');
+  eq(segs[1].type, 'strike');
+  eq(segs[1].text, 'b');
+  eq(segs[2].text, 'c', '结尾的普通文本被吃掉了');
+});
+
+test('删除线在标题 / 列表 / 引用 / 表格里同样生效（同一套行内解析）', () => {
+  eq(blocks('## ~~作废~~')[0].segments[0].type, 'strike', '标题里的删除线没解析');
+  eq(FIRST('- ~~作废~~').items[0].segments[0].type, 'strike', '列表里的删除线没解析');
+  eq(FIRST('> ~~作废~~').segments[0].type, 'strike', '引用里的删除线没解析');
+  eq(
+    table0(blocks('| A |\n| --- |\n| ~~作废~~ |')).rows[0][0].segments[0].type,
+    'strike',
+    '表格单元格里的删除线没解析'
+  );
 });
 
 // ── 汇总 ──────────────────────────────────────────────────────────────────

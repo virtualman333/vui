@@ -448,6 +448,8 @@ export default {
 		 *     换序实测结果完全一致（第一版注释写成「顺序颠倒就退回旧行为」，已被注入实测推翻）。
 		 *  ⑤ **认出来的定界符还要过 `delimiterOk` 这一关**：`3 * 4 * 5` 与
 		 *     `user_name_count` 里的符号根本不是强调定界符，正则认出来了也不算数 —— 见该方法。
+		 *  ⑥ **删除线 `~~x~~` 与强调共用同一套两侧判据**：`~~ 说明 ~~` 不成立（原文照收），
+		 *     并且两端必须是一整对波浪号 —— `~~~~作废~~~~` 原样保留，不会留下两个孤零零的 `~`。
 		 */
 		/**
 		 * 这一对定界符**算不算**强调 —— 判据是它两侧长什么样，不是「出现了几个相同符号」。
@@ -467,7 +469,7 @@ export default {
 		 * 赋予它强调语义 —— 这正是 CommonMark 对待「不能成立的定界符」的方式（原文照旧）。
 		 */
 		delimiterOk(src, index, token) {
-			const open = /^(\*+|_+)/.exec(token);
+			const open = /^(\*+|_+|~+)/.exec(token);
 			if (!open) return true; // 行内代码 / 链接，不归这条判据管
 			const ch = token.charAt(0);
 			/* 两端符号必须同族才谈得上「一对定界符」；不同族说明这条备选不是我们想的那种，
@@ -484,12 +486,26 @@ export default {
 				const after = index + token.length < src.length ? src.charAt(index + token.length) : '';
 				if (WORD_CHAR.test(before) || WORD_CHAR.test(after)) return false;
 			}
+			/* ③ 删除线的两端必须是一整对波浪号：`~~~~作废~~~~` 里那四个是同一个符号串，
+			   而正则只能从第二个 `~` 起匹配到中间那两个 —— 若不拦，用户会在两侧各看到
+			   一个孤零零的 `~`（`~作废~` 那样的残渣）。前后紧邻还有 `~` 就说明这不是一对，
+			   原文照收。注意这一条**不能**写成「run 必须等于 2」：正则会匹配出的 token
+			   永远以 `~~` 开头，那是条走不到的死判据。 */
+			if (ch === '~') {
+				const before = index > 0 ? src.charAt(index - 1) : '';
+				const after = index + token.length < src.length ? src.charAt(index + token.length) : '';
+				if (before === '~' || after === '~') return false;
+			}
 			return true;
 		},
 		parseInline(text) {
 			const segs = [];
 			const src = text === null || text === undefined ? '' : String(text);
-			const re = /(`[^`]+`|!\[[^\]]*\]\([^)\s]+\)|\[[^\]]*\]\([^)\s]+\)|\*\*\*[^*]+\*\*\*|___[^_]+___|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_)/g;
+			/* ⚠ 这条正则的每条备选都是**一个「行内形态」**，而 `scripts/check-markdown.js`
+			   的 INLINE_FORMS 是它的登记表：两边必须一一对应（少一条、多一条都红），
+			   每条登记形态还配一个探针断言真渲染出声明的片段与样式类。
+			   加新形态时**同时**改这两处 —— 否则用户会看到源码原文而没人报错。 */
+			const re = /(`[^`]+`|!\[[^\]]*\]\([^)\s]+\)|\[[^\]]*\]\([^)\s]+\)|~~[^~\n]+~~|\*\*\*[^*]+\*\*\*|___[^_]+___|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_)/g;
 			let last = 0;
 			let m;
 			while ((m = re.exec(src)) !== null) {
@@ -512,6 +528,10 @@ export default {
 					segs.push.apply(segs, this.emphasize(token.slice(2, -2), 'bold'));
 				} else if (token.charAt(0) === '`') {
 					segs.push({ type: 'code', text: token.slice(1, -1) });
+				} else if (token.indexOf('~~') === 0) {
+					/* 删除线（GFM 的 `~~x~~`）。模型改口、标注作废项时常用；
+					   此前这两个波浪号会**原样显示给用户**。 */
+					segs.push.apply(segs, this.emphasize(token.slice(2, -2), 'strike'));
 				} else {
 					segs.push.apply(segs, this.emphasize(token.slice(1, -1), 'italic'));
 				}
@@ -575,7 +595,13 @@ export default {
 			});
 			return nested.map((s) => Object.assign({}, s, flag));
 		},
-		/** 行内片段对应的样式类（类型 + 强调修饰标记） */
+		/**
+		 * 行内片段对应的样式类（类型 + 强调修饰标记）
+		 *
+		 * ⚠ 每个分支的类名必须**在样式块里真有定义**：`scripts/check-markdown.js` 的
+		 * INLINE_FORMS 登记表会逐条核对「登记形态 → 片段类型 → 样式类 → 编译后的 CSS」，
+		 * 少了任何一环都算「解析出来了但用户看不出差别」。
+		 */
 		segClass(seg) {
 			if (!seg || !seg.type) return '';
 			const cls = [];
@@ -583,9 +609,11 @@ export default {
 			else if (seg.type === 'italic') cls.push('vui-markdown__italic');
 			else if (seg.type === 'code') cls.push('vui-markdown__code-inline');
 			else if (seg.type === 'link') cls.push('vui-markdown__link');
+			else if (seg.type === 'strike') cls.push('vui-markdown__strike');
 			// 强调里的链接：类型是 link，但有 bold / italic 标记（见 emphasize()）
 			if (seg.bold) cls.push('vui-markdown__bold');
 			if (seg.italic) cls.push('vui-markdown__italic');
+			if (seg.strike) cls.push('vui-markdown__strike');
 			return cls.join(' ');
 		},
 		/** 片段点击：只有链接片段有行为，其余原样返回（模板里每个片段都挂这一个入口） */
@@ -800,6 +828,13 @@ $vui-code-color: #abb2bf !default;
 
 	&__italic {
 		font-style: italic;
+	}
+
+	/* 删除线：`~~作废~~`。用 text-decoration 而不是虚线边框 —— 删除线的语义就是「划掉」，
+	   而它在小程序 / App / H5 三端对嵌套 <text> 的支持是一致的（链接那处刻意没用
+	   text-decoration 是另一回事：那里要的是「看起来能点」，各端差异会误导用户）。 */
+	&__strike {
+		text-decoration: line-through;
 	}
 
 	&__code-inline {
