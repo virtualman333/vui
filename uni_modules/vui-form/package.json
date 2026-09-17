@@ -1,7 +1,7 @@
 {
   "id": "vui-form",
   "displayName": "vui-form",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "VUI 表单组件（含 vui-form-item）",
   "keywords": [
     "vui-form"

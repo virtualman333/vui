@@ -1,7 +1,7 @@
 {
   "id": "vui-checkbox",
   "displayName": "vui-checkbox",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "VUI 复选框组件",
   "keywords": [
     "vui-checkbox"
