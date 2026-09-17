@@ -126,6 +126,15 @@ const MD_BLOCK = {
 	indented: /^[ \t]+\S/
 };
 
+/**
+ * 「词字符」—— 判断 `_` 是不是**词中间**那个下划线（词中间的下划线不是强调定界符）。
+ *
+ * 为什么不用 `\w`：CommonMark 判 flanking 看的是「旁边那个字符是不是标点」，
+ * 而中文没有词间空格，`中文_变量_名` 里的下划线同样落在「非标点旁边」，一样不是定界符。
+ * 所以汉字区段也算词字符（Ext-A / 基本区 / 兼容区三段，够覆盖常用字）。
+ */
+const WORD_CHAR = /[0-9A-Za-z_\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
+
 export default {
 	name: 'VuiMarkdown',
 	emits: ['copy', 'link'],
@@ -420,7 +429,7 @@ export default {
 		/**
 		 * 行内解析：行内代码 / 链接 / 图片 / 粗体 / 斜体 / 粗斜体
 		 *
-		 * 四个容易踩的点：
+		 * 五个容易踩的点：
 		 *  ① **一次扫描，不逐轮 replace**。分轮替换会让前一轮产出的文本被后一轮再解析一遍，
 		 *     典型后果是「代码里的 `[a](b)` 变成链接」「链接文字里的 `*` 变成斜体」。
 		 *     这里用一条正则按出现位置切，**行内代码排在首位**，于是 `` `[a](b)` `` 只会是代码。
@@ -437,7 +446,46 @@ export default {
 		 *     ⚠ 真正起作用的是「这条备选**存在**」，**不是备选之间的顺序**：三重那条要求
 		 *     紧跟三个 `*`、双写那条要求第三个字符不是 `*`，两者在任一位置上互斥，
 		 *     换序实测结果完全一致（第一版注释写成「顺序颠倒就退回旧行为」，已被注入实测推翻）。
+		 *  ⑤ **认出来的定界符还要过 `delimiterOk` 这一关**：`3 * 4 * 5` 与
+		 *     `user_name_count` 里的符号根本不是强调定界符，正则认出来了也不算数 —— 见该方法。
 		 */
+		/**
+		 * 这一对定界符**算不算**强调 —— 判据是它两侧长什么样，不是「出现了几个相同符号」。
+		 *
+		 * 两条规则各自对应一类模型输出里天天出现的写法，而这两类此前都被**改坏了**：
+		 *
+		 *   ① **紧邻空白时不成立**：`计算 3 * 4 * 5 的结果` 是乘法。此前 `\*[^*\n]+\*` 会把
+		 *      `* 4 *` 整个吃成斜体，用户看到的是「计算 3  4  5 的结果」—— 两个星号消失、
+		 *      中间那个数字还变成了斜体。`** 说明 **` 这类带空格的强调标记同理。
+		 *   ② **`_` 出现在词中间时不成立**（CommonMark 的 intraword 规则）：
+		 *      `变量 user_name_count 与 my_var 在这里` 此前渲染成
+		 *      `变量 usernamecount 与 my_var 在这里` —— 两个下划线被吃掉、单词被切成三段斜体；
+		 *      `:white_check_mark:` 变成 `:whitecheckmark:`。**标识符是模型讲代码、讲数据库
+		 *      字段、讲变量名时最常出现的词形**，而这类损坏一个字都不会报错。
+		 *
+		 * 返回 false 时调用方把整个 token 当**普通文本**收下（内容一个字都不改），只是不再
+		 * 赋予它强调语义 —— 这正是 CommonMark 对待「不能成立的定界符」的方式（原文照旧）。
+		 */
+		delimiterOk(src, index, token) {
+			const open = /^(\*+|_+)/.exec(token);
+			if (!open) return true; // 行内代码 / 链接，不归这条判据管
+			const ch = token.charAt(0);
+			/* 两端符号必须同族才谈得上「一对定界符」；不同族说明这条备选不是我们想的那种，
+			   放行交给下游分支去判（宁可放行也不要在这里静默吃掉一个 token）。 */
+			if (token.charAt(token.length - 1) !== ch) return true;
+			const run = open[1].length;
+			const inner = token.slice(run, token.length - run);
+			if (!inner.length) return false;
+			/* ① 开定界符后面、闭定界符前面不许紧邻空白 */
+			if (/^\s/.test(inner) || /\s$/.test(inner)) return false;
+			/* ② `_` 不许出现在词中间（外侧紧邻词字符即视为词中间） */
+			if (ch === '_') {
+				const before = index > 0 ? src.charAt(index - 1) : '';
+				const after = index + token.length < src.length ? src.charAt(index + token.length) : '';
+				if (WORD_CHAR.test(before) || WORD_CHAR.test(after)) return false;
+			}
+			return true;
+		},
 		parseInline(text) {
 			const segs = [];
 			const src = text === null || text === undefined ? '' : String(text);
@@ -452,6 +500,9 @@ export default {
 				const link = this.parseLinkToken(token);
 				if (link) {
 					segs.push(link);
+				} else if (token.charAt(0) !== '`' && !this.delimiterOk(src, m.index, token)) {
+					/* 定界符不成立 → 原文照收（内容一个字都不改），只是不当强调 —— 见 delimiterOk */
+					segs.push({ type: 'text', text: token });
 				} else if (token.indexOf('***') === 0 || token.indexOf('___') === 0) {
 					/* 三重定界符 = 加粗 + 斜体。分支排在双写之前只是可读性上的写法，
 					   没有语义依赖：`***x***` 即便落到双写分支，`slice(2,-2)` 拿到的是
@@ -469,7 +520,20 @@ export default {
 			if (last < src.length) {
 				segs.push({ type: 'text', text: src.slice(last) });
 			}
-			return segs;
+			/* 相邻的普通 text 片段合并 —— 定界符判据不成立时我们把整个 token 原样收下，
+			   于是会出现「前置文本 + token + 后置文本」三段首尾相接的文本片段
+			   （`变量 user` / `_name_` / `count 与 my_var 在这里`）。渲染结果一样，
+			   但在小程序端每一段都是一个节点，白白多两层嵌套。
+			   只合并**没有修饰标记**的片段：带 bold / italic 标记的那种是强调里展开出来的
+			   （见 emphasize），把后面的普通文本并进去会让它平白继承修饰。 */
+			const plain = (s) => s && s.type === 'text' && !s.bold && !s.italic;
+			const out = [];
+			for (let k = 0; k < segs.length; k++) {
+				const prev = out[out.length - 1];
+				if (plain(segs[k]) && plain(prev)) prev.text += segs[k].text;
+				else out.push(segs[k]);
+			}
+			return out;
 		},
 		/**
 		 * `[文本](地址)` / `![替代文本](图片地址)` → link 片段；不是链接时返回 null。

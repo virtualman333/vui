@@ -32,6 +32,8 @@
  *   8. 表格不会吃掉后面的内容（代码块、段落仍是独立块；围栏内的表格不解析）
  *   9. 结构锁：模板里的表格必须在 `scroll-view scroll-x` 里（否则窄屏上宽表
  *      会把整页撑破 —— 这是移动端最难看的一类故障）
+ *  10. 行内定界符的**两侧判据**：`user_name_count` 不许变成 `usernamecount`、
+ *      `3 * 4 * 5` 不许变成 `3  4  5`（下划线 / 星号被当成强调定界符吃掉了）
  *
  * 用法：
  *   npm run check:markdown
@@ -754,6 +756,123 @@ test('结构锁：块级标记**只有一份** —— 改掉它，主循环与�
   const bs = b2('- 用法：\n  ---\n- 结束');
   eq(bs.length, 1, '改掉 MD_BLOCK.hr 之后 `  ---` 仍被排除在续行之外 —— 续行判定另有一份判据');
   eq(bs[0].items[0].text, '用法：\n---', '续行判定没有随 MD_BLOCK.hr 一起变');
+});
+
+// ── 12. 行内定界符的两侧判据 ──────────────────────────────────────────────
+
+/**
+ * `user_name_count` 此前渲染成 `usernamecount`，`计算 3 * 4 * 5 的结果` 渲染成
+ * `计算 3  4  5 的结果`。
+ *
+ * 根因同一个：行内正则只管「有没有一对相同符号」，不问这对符号**两侧长什么样**。
+ * 于是 `_name_` 被当成斜体定界符吃掉了两个下划线（`user_name_count` 被切成三段），
+ * `* 4 *` 被当成斜体定界符吃掉了两个星号。**用户看到的和模型写的不是一个东西**，
+ * 而整套检查全绿 —— 与「表格被吞成普通段落」是同一族故障。
+ *
+ * 这一组用例的形状刻意是**逐字比对**（原文 vs 渲染出的文本），不留「差不多就行」的余地：
+ * 这类损坏恰恰是「少了几个字符」而不是「整段没了」，模糊判据抓不住它。
+ */
+const FIRST = (md) => blocks(md)[0];
+
+test('词中间的下划线不是定界符：snake_case 逐字保留', () => {
+  const md = '变量 user_name_count 与 my_var 在这里';
+  deepEq(segsOf(md), [{ type: 'text', text: md }], '词中间的下划线被当成了斜体定界符 —— 下划线被吃掉、单词被切开');
+  eq(FIRST(md).text, md, '段落原文也被改写了');
+});
+
+test('emoji 短代码同理（`:white_check_mark:` 不许变成 `:whitecheckmark:`）', () => {
+  const md = '完成 :white_check_mark: 通过';
+  deepEq(segsOf(md), [{ type: 'text', text: md }]);
+});
+
+test('紧邻空白的星号不是定界符：乘号 `3 * 4 * 5` 逐字保留', () => {
+  const md = '计算 3 * 4 * 5 的结果';
+  deepEq(segsOf(md), [{ type: 'text', text: md }], '乘号被当成了斜体定界符 —— 两个星号消失、中间的数字变斜体');
+});
+
+test('带空格的强调标记不成立（`** 重点 **` 是字面文本）', () => {
+  const md = '这是 ** 重点 ** 与 * 斜 *';
+  deepEq(segsOf(md), [{ type: 'text', text: md }]);
+});
+
+test('各处上下文一致：列表 / 引用 / 标题 / 表格里的乘号与 snake_case 都不被吃', () => {
+  eq(FIRST('- 计算 3 * 4 * 5 的结果').items[0].text, '计算 3 * 4 * 5 的结果');
+  eq(FIRST('> 字段 is_deleted 为真').text, '字段 is_deleted 为真');
+  eq(FIRST('## 关于 is_deleted 字段').text, '关于 is_deleted 字段');
+  eq(table0(blocks('| a |\n| --- |\n| is_deleted |')).rows[0][0].text, 'is_deleted');
+});
+
+test('反向对照：该生效的强调一条都不许丢', () => {
+  /* 为什么必须有这条：把判据收紧到「谁都不成立」也能让上面几条全绿。
+     下面那条结构锁会把 delimiterOk 改成恒真，届时**这一条**会红 —— 两边互为对照。 */
+  deepEq(segsOf('**重点**'), [{ type: 'bold', text: '重点' }]);
+  deepEq(segsOf('*斜*'), [{ type: 'italic', text: '斜' }]);
+  deepEq(segsOf('_斜_'), [{ type: 'italic', text: '斜' }]);
+  deepEq(segsOf('__粗__'), [{ type: 'bold', text: '粗' }]);
+  deepEq(segsOf('***重点***'), [{ type: 'text', text: '重点', bold: true, italic: true }]);
+  deepEq(segsOf('___重点___'), [{ type: 'text', text: '重点', bold: true, italic: true }]);
+  deepEq(
+    segsOf('这是 *重点* 与 **粗体**'),
+    [
+      { type: 'text', text: '这是 ' },
+      { type: 'italic', text: '重点' },
+      { type: 'text', text: ' 与 ' },
+      { type: 'bold', text: '粗体' }
+    ],
+    '正常写法（定界符两侧是空格）被误伤了'
+  );
+  /* `_` 强调前后有空格时照常成立 —— 词边界判据不该误伤这种最常见的写法 */
+  deepEq(segsOf('这是 _重点_ 内容').map((s) => s.type), ['text', 'italic', 'text']);
+  /* `3*4*5` 是 CommonMark 允许的词内强调（`*` 不受词边界限制），不能跟着一起被禁掉 */
+  deepEq(segsOf('3*4*5').map((s) => s.type), ['text', 'italic', 'text']);
+  /* 强调里嵌链接 / 行内代码这几条老行为一条都不能少 */
+  eq(segOf('**[文档](https://a.com)**', 'link').bold, true);
+  eq(segOf('*[文档](https://a.com)*', 'link').italic, true);
+  const c = segsOf('***`npm i`***')[0];
+  ok(c.type === 'code' && c.bold === true && c.italic === true, '三重里的行内代码丢了标记');
+});
+
+test('结构锁：两侧判据只有一份，且 parseInline 真的在用它', () => {
+  /* 不读源码形态（那种断言会被一行注释骗过），而是把 delimiterOk 改成**恒真**再问两件事：
+       ① 渲染结果**变没变** —— 没变就说明 parseInline 没调用它（判据是死代码）；
+       ② 变了之后是不是**恰好变成损坏后的样子** —— 是才说明这两条规则都活在它里面。
+     任何一条不成立（改成内联判断、只留一半规则、或干脆不调用），这里就会红。 */
+  const file = path.join(root, 'uni_modules/vui-markdown/components/vui-markdown/vui-markdown.vue');
+  const raw = fs.readFileSync(file, 'utf8');
+  const { descriptor } = parse(raw, { filename: 'vui-markdown.vue' });
+  const code = descriptor.script.content;
+  const patched = code.replace(
+    /(\tdelimiterOk\(src, index, token\) \{)[\s\S]*?(\n\t\t\},)/,
+    '$1\n\t\t\treturn true; /* 注入：判据恒真 */$2'
+  );
+  ok(patched !== code, '没能在源码里找到 delimiterOk 的方法体 —— 方法被改名了？本条锁需要同步');
+  ok(patched.includes('判据恒真'), '打补丁没生效（delimiterOk 还是原样）');
+
+  const m = { exports: {} };
+  new Function('module', 'exports', patched.replace(/^export default\b/m, 'module.exports ='))(m, m.exports);
+  const o = m.exports;
+  const grabWith = (mod, md) => {
+    const c2 = Object.assign({}, propsDefault, mod.data(), mod.methods, { content: md });
+    return mod.computed.blocks.call(c2)[0].segments.map((s) => s.text).join('');
+  };
+  const IN_WORD = '变量 user_name_count 在这里';
+  const TIMES = '计算 3 * 4 * 5 的结果';
+
+  /* ⚠ 这里比的**不是**「补丁后等于某个字面量」，而是「打补丁前后有没有差别」。
+     只断言前者是不够的：假如 parseInline 压根没调用 delimiterOk，那么**补丁前的代码
+     本身就是损坏后的样子**，那条断言照样绿 —— 判据变成死代码时锁一声不响。
+     （第 18 轮负向验证 D3 实测抓到的假绿，改成本写法后 D3 立刻红。） */
+  ok(
+    grabWith(opts, IN_WORD) !== grabWith(o, IN_WORD),
+    '把 delimiterOk 改成恒真之后词内下划线的渲染结果**没变** —— parseInline 没有调用它（判据是死代码）'
+  );
+  ok(
+    grabWith(opts, TIMES) !== grabWith(o, TIMES),
+    '把 delimiterOk 改成恒真之后乘号的渲染结果**没变** —— parseInline 没有调用它（判据是死代码）'
+  );
+  /* 两个方向都钉住：规则**活在这一个方法里**（改它，两处行为一起变） */
+  eq(grabWith(o, IN_WORD), '变量 usernamecount 在这里', '恒真之后词内下划线没被吃 —— 这条判据不在 delimiterOk 里');
+  eq(grabWith(o, TIMES), '计算 3  4  5 的结果', '恒真之后乘号没被吃 —— 这条判据不在 delimiterOk 里');
 });
 
 // ── 汇总 ──────────────────────────────────────────────────────────────────
