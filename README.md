@@ -7,7 +7,7 @@
 [![官网](https://img.shields.io/badge/site-online-7166F0.svg)](https://virtualman333.github.io/vui/)
 [![在线演示](https://img.shields.io/badge/demo-online-7166F0.svg)](https://virtualman333.github.io/vui/demo/)
 
-> 基于 uni-app 的 **Vue 3** 跨端组件库 —— 48 个开箱即用的组件，一套代码同时跑 iOS / Android / H5 / 微信小程序等各家小程序。
+> 基于 uni-app 的 **Vue 3** 跨端组件库 —— 49 个开箱即用的组件，一套代码同时跑 iOS / Android / H5 / 微信小程序等各家小程序。
 
 **官网**：[https://virtualman333.github.io/vui/](https://virtualman333.github.io/vui/)
 
@@ -30,7 +30,7 @@
 ## 特性
 
 - **跨端一致**：iOS / Android / H5 / 各家小程序，一套代码多端运行
-- **AI 场景就绪**：内置对话气泡、流式打字机、推理过程面板、Markdown 渲染、模型选择等 11 个 AI 组件
+- **AI 场景就绪**：内置对话气泡、流式打字机、推理过程面板、Markdown 渲染、模型选择等 12 个 AI 组件
 - **零配置引入**：基于 easycom，配好一次后无需 import，直接写标签
 - **可换肤**：全部颜色收敛到 SCSS 变量，改一个 `$vui-primary` 即可全库换色
 - **类型友好**：内置 TypeScript 声明，编辑器可提示 props 与事件
@@ -245,7 +245,7 @@ $vui-primary: #7166f0;
 
 ## 组件总览
 
-共 **48** 个组件、**298** 个属性、**75** 个事件。
+共 **49** 个组件、**307** 个属性、**76** 个事件。
 完整 API（属性 / 事件 / 插槽）见 [docs/API.md](docs/API.md)。
 
 ### 基础组件
@@ -325,6 +325,7 @@ $vui-primary: #7166f0;
 | `<vui-markdown>` | 轻量 Markdown 渲染 | easycom 自动 | `content`, `selectable`, `showCopy`, `codeMaxHeight` |
 | `<vui-model-select>` | 模型选择 | easycom 自动 | `modelValue`, `options`, `title`, `placeholder`, `disabled` |
 | `<vui-voice-input>` | 语音输入 | easycom 自动 | `modelValue`, `disabled`, `maxDuration`, `tipText`, `releaseText` |
+| `<vui-source-list>` | 引用来源列表 | easycom 自动 | `sources`, `title`, `variant`, `showIndex`, `activeIndex` |
 
 ## TypeScript 支持
 

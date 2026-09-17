@@ -198,14 +198,14 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 | `npm run check:entry` | 把 `index.js` 复制为 `.mjs` 后 `node --check`（入口语法 + 是否有 default 导出） |
 | `npm run check:types` | `tsc --noEmit` 检查 `types/index.d.ts`（自建 `vue` 模块 stub，`moduleResolution: bundler`；`skipLibCheck` 必须为 false，否则等于没查） |
 | `npm run check:gen` | 在临时副本里重新跑生成器，与已提交产物逐文件比对（白名单一致性见下一条） |
-| `npm run check:pack` | 取 `npm pack --dry-run --json` 的**真实**打包清单：必需文件是否都在、48 个组件的四件套是否齐全、演示页/脚本/工程文件是否误入包、体积是否超标 |
+| `npm run check:pack` | 取 `npm pack --dry-run --json` 的**真实**打包清单：必需文件是否都在、每个组件的四件套是否齐全（数量不写死在这里 —— 它随组件数变，扫描面对账见 `check:pack` 自身）、演示页/脚本/工程文件是否误入包、体积是否超标 |
 | `npm run check:theme` | 扫描全部组件的 `<style lang="scss">`：硬编码色值（第五节禁止）、缺主题兜底块、以及基线白名单是否失效 |
 | `npm run check:rules` | 执行第二节红线与第四节写法约定里可静态判定的几条：`v-html`、`<script setup>`、Vue2 的 `model:` 选项、跨 uni_modules import、用了 `$emit` 却没声明 `emits`、缺首块 JSDoc、`.npmrc` 是否被 git 跟踪或被忽略 |
 | `npm run check:release` | `release.js` 第 0 步发布前置检查的自检：注入假环境跑一遍四类拦截（凭证不可用 / registry 已有该版本 / 本地 tag 已存在 / `.npmrc` 未被忽略），外加三条结构锁（`preflight` 必须在任何写入之前被调用、旧的「只看 `.npmrc` 文件是否存在」判据不得复活） |
 | `npm run check:template` | 仅模板作用域（`check` 里也调了一遍，这里留作单独排查与兜底） |
 | `npm run check:components` | 组件枚举与结构检查的自检：在仓库副本里注入「`.vue` 名字写错」「缺 `components/` 目录」两种坏结构，`prepublish-check` 必须拦下并点名；外加两条结构锁（组件枚举只有一份、组件数 == `.vue` 数） |
 | `npm run check:markdown` | vui-markdown 解析器的**行为测试**（唯一一条真的执行组件代码的检查）：用 `@vue/compiler-sfc` 取出 `<script>` 求值出组件选项，逐个断言表格识别 / 列数补齐 / 对齐标记 / `\|` 转义 / 普通文本不得被误判 / 围栏优先级，外加「模板里的表格必须在 `scroll-view scroll-x` 里」的结构锁 |
-| `npm run check:category` | `gen-docs.py` 的 `CATEGORY` 白名单不变量：每个组件**恰好登记一次**（同一分类内写两遍、或跨分类重复，一律失败）、与 `uni_modules/` 双向覆盖、id 命名规范、解析失败即失败；解析器在 `scripts/lib/category.js`（与 `check-gen` 共用同一份） |
+| `npm run check:category` | `gen-docs.py` 的 `CATEGORY` 白名单不变量：每个组件**恰好登记一次**（同一分类内写两遍、或跨分类重复，一律失败）、与 `uni_modules/` 双向覆盖、id 命名规范、解析失败即失败；外加**「数量声称 vs 独立真值」对账**（README 里每处「N 个组件 / N 个 AI 组件」必须等于文件系统 / 白名单的真值，演示页 hero 文案那处手写的也一并钉住）。解析器在 `scripts/lib/category.js`（与 `check-gen` 共用同一份） |
 
 - 入口 / 类型声明这两条尤其重要：`index.js` 与 `types/index.d.ts` 都是**发布时由 `scripts/gen-package.py` 重新生成**的，生成脚本出问题时，`check` 的覆盖性校验照样全绿（组件都在），但使用方 import 本包会直接编译报错。
 - `check:gen` 补的是上面几条共同的盲区：它们查的都是「产物**自身**是否合法」，没有一条查「产物是否还**反映源码**」。改了组件没跑 `npm run gen` 时，旧产物照样合法；而新组件漏登记 `CATEGORY` 时，重新生成的结果与已提交产物**完全一致**（都缺它），只有组件集合比对能发现 —— 这两种情况都真实发生过。

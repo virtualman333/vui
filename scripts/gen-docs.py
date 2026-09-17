@@ -24,7 +24,7 @@ CATEGORY = {
     '媒体组件': ['vui-carousel'],
     'AI 组件': ['vui-chat-bubble', 'vui-chat-input', 'vui-typing', 'vui-thinking',
                 'vui-feedback', 'vui-copy', 'vui-code', 'vui-prompt-card',
-                'vui-markdown', 'vui-model-select', 'vui-voice-input'],
+                'vui-markdown', 'vui-model-select', 'vui-voice-input', 'vui-source-list'],
 }
 
 
@@ -275,7 +275,7 @@ README = """# Virtual UI (VUI)
 ## 特性
 
 - **跨端一致**：iOS / Android / H5 / 各家小程序，一套代码多端运行
-- **AI 场景就绪**：内置对话气泡、流式打字机、推理过程面板、Markdown 渲染、模型选择等 11 个 AI 组件
+- **AI 场景就绪**：内置对话气泡、流式打字机、推理过程面板、Markdown 渲染、模型选择等 %(ai_count)d 个 AI 组件
 - **零配置引入**：基于 easycom，配好一次后无需 import，直接写标签
 - **可换肤**：全部颜色收敛到 SCSS 变量，改一个 `$vui-primary` 即可全库换色
 - **类型友好**：内置 TypeScript 声明，编辑器可提示 props 与事件
@@ -628,6 +628,7 @@ Virtual UI (VUI) 遵循 [MIT](LICENSE) 开源许可证。
 
 readme = README % {
     'comp_count': len(COMPS),
+    'ai_count': len(CATEGORY['AI 组件']),
     'prop_count': total_props,
     'event_count': total_events,
     'overview': '\n'.join(overview),

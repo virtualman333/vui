@@ -2,7 +2,7 @@
 	<view class="page">
 		<view class="hero">
 			<text class="hero__title">AI 组件</text>
-			<text class="hero__desc">11 个面向大模型对话场景的组件，覆盖「输入 → 流式输出 → 推理展示 → 富文本渲染 → 反馈」完整链路</text>
+			<text class="hero__desc">12 个面向大模型对话场景的组件，覆盖「输入 → 流式输出 → 推理展示 → 富文本渲染 → 引用来源 → 反馈」完整链路</text>
 		</view>
 
 		<!-- 模型选择 + 复制 -->
@@ -125,6 +125,27 @@
 			</view>
 		</view>
 
+		<!-- 引用来源 -->
+		<view class="card">
+			<text class="card__title">引用来源</text>
+			<text class="card__desc">
+				展示 RAG / 联网检索的来源。点右侧按钮模拟「点了正文里的 [1] 角标」，列表会联动高亮；
+				组件不自行打开链接，由 select 事件决定（H5 用 window.open，小程序走 web-view 页）。
+			</text>
+			<vui-source-list
+				:sources="sources"
+				title="参考来源"
+				:active-index="activeSource"
+				@select="onSourceSelect"
+			/>
+			<view class="card__row">
+				<vui-button @click="cycleSource">切换高亮（模拟点正文角标）</vui-button>
+				<text class="card__hint">{{ sourceTip }}</text>
+			</view>
+			<text class="card__desc">紧凑模式（单行标签，适合放在回答下方）：</text>
+			<vui-source-list :sources="sources" variant="compact" :show-index="false" title="" />
+		</view>
+
 		<!-- 语音输入 -->
 		<view class="card">
 			<text class="card__title">语音输入</text>
@@ -171,6 +192,19 @@ export default {
 			typingRunning: false,
 			recording: false,
 			voiceTip: '',
+			sourceTip: '',
+			activeSource: 's1',
+			sources: [
+				{ id: 's1', title: 'Uniswap V4 白皮书', url: 'https://uniswap.org/whitepaper-v4.pdf', tag: '官方文档' },
+				{
+					id: 's2',
+					title: 'PostgreSQL 分区表实践：按时间分区降低历史数据扫描量',
+					url: 'https://www.postgresql.org/docs/current/ddl-partitioning.html',
+					domain: 'postgresql.org',
+					snippet: '声明式分区在查询规划阶段就能裁掉不相关的分区，对时序表尤其有效。'
+				},
+				{ id: 's3', title: '组合式 API 与选项式 API 的取舍', url: 'https://cn.vuejs.org/guide/extras/composition-api-faq.html', tag: '框架' }
+			],
 			md: [
 				'# Markdown 渲染',
 				'',
@@ -263,6 +297,17 @@ export default {
 			}
 		},
 
+		onSourceSelect(source) {
+			this.sourceTip = `点击了：${source.title}`;
+			this.activeSource = source.id;
+		},
+		/** 模拟「点了正文里的 [1] / [2] / [3] 角标」 */
+		cycleSource() {
+			const ids = this.sources.map((s) => s.id);
+			const next = ids[(ids.indexOf(this.activeSource) + 1) % ids.length];
+			this.activeSource = next;
+			this.sourceTip = `正文角标 → [${ids.indexOf(next) + 1}]`;
+		},
 		/** 发送消息并模拟一次流式回答 */
 		onSend(text) {
 			const content = (text || '').trim();
@@ -302,7 +347,7 @@ export default {
 		/** 逐字填充「推理过程」再填充「回答」，模拟真实流式返回 */
 		stream(index) {
 			const THINK = '用户在问 VUI 的 AI 组件覆盖什么。我按对话链路来组织回答：先讲消息气泡负责布局，再讲打字机负责流式观感，然后说推理面板用来展示思考过程，最后补 Markdown 渲染与交互反馈。';
-			const ANSWER = 'VUI 的 AI 组件覆盖了对话的完整链路：\n\n1. 消息布局 —— vui-chat-bubble 负责气泡与头像；\n2. 输入环节 —— vui-chat-input 支持自适应高度与发送/停止切换；\n3. 流式观感 —— vui-typing 逐字输出，文本递增时自动续播；\n4. 推理展示 —— vui-thinking 可折叠，并显示耗时；\n5. 内容渲染 —— vui-markdown 与 vui-code 负责富文本；\n6. 收尾交互 —— vui-feedback、vui-copy 完成评价与复制。';
+			const ANSWER = 'VUI 的 AI 组件覆盖了对话的完整链路：\n\n1. 消息布局 —— vui-chat-bubble 负责气泡与头像；\n2. 输入环节 —— vui-chat-input 支持自适应高度与发送/停止切换；\n3. 流式观感 —— vui-typing 逐字输出，文本递增时自动续播；\n4. 推理展示 —— vui-thinking 可折叠，并显示耗时；\n5. 内容渲染 —— vui-markdown 与 vui-code 负责富文本；\n6. 引用来源 —— vui-source-list 展示 RAG 检索到的出处，可与正文角标联动；\n7. 收尾交互 —— vui-feedback、vui-copy 完成评价与复制。';
 			let thinkDone = false;
 
 			const tick = () => {

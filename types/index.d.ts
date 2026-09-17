@@ -956,6 +956,36 @@ export type VuiSliderModelValue = VuiSliderProps['modelValue'];
 
 export const VuiSlider: DefineComponent<VuiSliderProps>;
 
+/** 引用来源列表 */
+export interface VuiSourceListProps {
+	/** 来源数组，元素为对象 { title, url, domain, snippet, tag, id }，也可直接传 URL 字符串 */
+	sources?: any[];
+	/** 列表标题，默认「参考来源」 */
+	title?: string;
+	/** 展示形态 list（卡片列表，默认）/ compact（单行标签） */
+	variant?: string;
+	/** 是否显示序号角标，默认 true */
+	showIndex?: boolean;
+	/** 高亮项的序号（从 1 开始）或来源的 id，用于与正文角标联动 */
+	activeIndex?: any;
+	/** 标题最大行数，默认 2，传 0 表示不截断 */
+	maxTitleLines?: number;
+	/** 摘要最大行数，默认 2，传 0 表示不截断 */
+	maxSnippetLines?: number;
+	/** 无来源时的占位文案 */
+	emptyText?: string;
+	/** 是否可点击，默认 true */
+	clickable?: boolean;
+}
+
+/** 引用来源列表 事件 */
+export interface VuiSourceListEmits {
+	/** 点击某条来源时触发，参数为 (来源对象, 从 0 开始的索引) */
+	select: (...args: any[]) => void;
+}
+
+export const VuiSourceList: DefineComponent<VuiSourceListProps>;
+
 /** Steps 步骤条 */
 export interface VuiStepsProps {
 	/** 步骤数据 [{title, desc}] */
@@ -1333,6 +1363,8 @@ declare module 'vue' {
 		'vui-select': typeof VuiSelect;
 		VuiSlider: typeof VuiSlider;
 		'vui-slider': typeof VuiSlider;
+		VuiSourceList: typeof VuiSourceList;
+		'vui-source-list': typeof VuiSourceList;
 		VuiSteps: typeof VuiSteps;
 		'vui-steps': typeof VuiSteps;
 		VuiSwitch: typeof VuiSwitch;

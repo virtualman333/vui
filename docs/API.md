@@ -58,6 +58,7 @@
   - [Markdown 轻量 Markdown 渲染](#vui-markdown)
   - [Model Select 模型选择](#vui-model-select)
   - [Voice Input 语音输入](#vui-voice-input)
+  - [Source List 引用来源列表](#vui-source-list)
 
 ---
 
@@ -991,4 +992,26 @@
 | `cancel` | 上滑取消录音 |
 | `finish` | 录音结束并拿到文件，参数为 { tempFilePath, duration, fileSize } |
 | `error` | 录音失败或当前环境不支持录音 |
+
+### vui-source-list
+
+**Source List 引用来源列表**
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| sources | `Array` | `[]` | 来源数组，元素为对象 { title, url, domain, snippet, tag, id }，也可直接传 URL 字符串 |
+| title | `string` | `'参考来源'` | 列表标题，默认「参考来源」 |
+| variant | `string` | `'list'` | 展示形态 list（卡片列表，默认）/ compact（单行标签） |
+| showIndex | `boolean` | `true` | 是否显示序号角标，默认 true |
+| activeIndex | `any` | `''` | 高亮项的序号（从 1 开始）或来源的 id，用于与正文角标联动 |
+| maxTitleLines | `number` | `2` | 标题最大行数，默认 2，传 0 表示不截断 |
+| maxSnippetLines | `number` | `2` | 摘要最大行数，默认 2，传 0 表示不截断 |
+| emptyText | `string` | `'暂无引用来源'` | 无来源时的占位文案 |
+| clickable | `boolean` | `true` | 是否可点击，默认 true |
+
+**事件**
+
+| 事件名 | 说明 |
+| --- | --- |
+| `select` | 点击某条来源时触发，参数为 (来源对象, 从 0 开始的索引) |
 

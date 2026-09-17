@@ -44,6 +44,7 @@ import VuiRegionPicker from './uni_modules/vui-region-picker/components/vui-regi
 import VuiScrollbar from './uni_modules/vui-scrollbar/components/vui-scrollbar/vui-scrollbar.vue'
 import VuiSelect from './uni_modules/vui-select/components/vui-select/vui-select.vue'
 import VuiSlider from './uni_modules/vui-slider/components/vui-slider/vui-slider.vue'
+import VuiSourceList from './uni_modules/vui-source-list/components/vui-source-list/vui-source-list.vue'
 import VuiSteps from './uni_modules/vui-steps/components/vui-steps/vui-steps.vue'
 import VuiSwitch from './uni_modules/vui-switch/components/vui-switch/vui-switch.vue'
 import VuiTable from './uni_modules/vui-table/components/vui-table/vui-table.vue'
@@ -94,6 +95,7 @@ const components = {
 	VuiScrollbar,
 	VuiSelect,
 	VuiSlider,
+	VuiSourceList,
 	VuiSteps,
 	VuiSwitch,
 	VuiTable,
@@ -164,6 +166,7 @@ export { default as VuiRegionPicker } from './uni_modules/vui-region-picker/comp
 export { default as VuiScrollbar } from './uni_modules/vui-scrollbar/components/vui-scrollbar/vui-scrollbar.vue';
 export { default as VuiSelect } from './uni_modules/vui-select/components/vui-select/vui-select.vue';
 export { default as VuiSlider } from './uni_modules/vui-slider/components/vui-slider/vui-slider.vue';
+export { default as VuiSourceList } from './uni_modules/vui-source-list/components/vui-source-list/vui-source-list.vue';
 export { default as VuiSteps } from './uni_modules/vui-steps/components/vui-steps/vui-steps.vue';
 export { default as VuiSwitch } from './uni_modules/vui-switch/components/vui-switch/vui-switch.vue';
 export { default as VuiTable } from './uni_modules/vui-table/components/vui-table/vui-table.vue';

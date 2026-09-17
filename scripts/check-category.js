@@ -17,11 +17,15 @@
  *   分类归属也随之变得二义：它到底属于基础组件还是媒体组件？
  *
  * 所以本脚本把「白名单不变量」集中到一处（解析器在 `lib/category.js`，与 `check-gen.js`
- * 共用同一份，不再各解析一遍），并检查四件事：
+ * 共用同一份，不再各解析一遍），并检查五件事：
  *   1. **恰好登记一次**：同一组件出现在两个分类、或同一分类里写两遍，一律失败；
  *   2. **双向覆盖**：组件目录里有而白名单没有（文档漏收录）/ 白名单里有而目录里没有（幽灵）；
  *   3. **命名规范**：id 必须符合 `vui-<kebab>`（拼音/下划线/大写都是笔误）；
  *   4. **解析失败即失败**：拿不到结构就报错退出，绝不在空集上全绿。
+ *   5. **README 里的数量声称与独立真值对账**：`check:gen` 只比对「重新生成 vs 已提交」，
+ *      两边带同一个错数字时它照样全绿 —— 第 4 轮「N 个 AI 组件」被手抄在生成器模板里，
+ *      加了第 48 个组件后它与 hero 行的「48 个组件」互相矛盾，没有任何检查报警。
+ *      这一条把「谁在扛这句声称」变成可执行断言。
  *
  * 本脚本自身也做负向自检（不复制仓库、不跑生成器，因此很快）：
  * 拿**真实的 gen-docs.py 源码**注入一个重复登记，`analyze()` 必须判出来；
@@ -31,8 +35,11 @@
  *   npm run check:category
  */
 const fs = require('fs');
+const path = require('path');
 const { componentIds } = require('./lib/components');
 const { parseCategories, analyze, GEN_DOCS } = require('./lib/category');
+
+const README = path.resolve(__dirname, '..', 'README.md');
 
 let failed = false;
 
@@ -99,6 +106,62 @@ if (!parsed) {
   } else {
     ok('每个分类都有组件');
   }
+
+  // ── 1d. README 里的「数量声称」必须与独立真值对账 ──────────────────────
+  // 为什么放在这里：`check:gen` 只查「重新生成 vs 已提交」，两边带着**同一个**错数字时
+  // 它照样全绿。真实发生过：hero 行的组件数是 `%(comp_count)d` 算出来的，但
+  // 「N 个 AI 组件」是模板里**手抄的字面量** —— 加第 48 个组件（vui-count-to）时它没跟着动，
+  // 于是同一份 README 里「48 个组件」与「11 个 AI 组件」并存，而进 AI 分类的组件已经有 12 个。
+  // 修法是让它也走占位符；这条检查是防它再被抄回去。
+  const claims = readmeClaims(fs.readFileSync(README, 'utf8'));
+  const truth = {
+    组件: comps.length,
+    'AI 组件': (parsed.cats.find((c) => c.name === 'AI 组件') || { ids: [] }).ids.length,
+  };
+  const units = [...new Set(claims.map((c) => c.unit))];
+  const missingUnits = ['组件', 'AI 组件', '属性', '事件'].filter((u) => !units.includes(u));
+  if (missingUnits.length) {
+    bad(
+      `README 里没抓到「${missingUnits.join(' / ')}」的数量声称`,
+      '解析失灵会让下面每条对账都在空集上通过 —— 这是本仓最贵的一类回归'
+    );
+  } else {
+    ok('README 数量声称扫描面', `${claims.length} 处（${units.join(' / ')}）`);
+  }
+  // 只为「组件」「AI 组件」对账：这两个的真值来自**别处**（文件系统 / CATEGORY 白名单）。
+  // 「属性」「事件」的数是同一个表达式算出来直接填进同一句话的，没有第二个来源可比，
+  // 硬找一份来比反而是在造一条恒真的断言（AGENTS.md 第五节：不会响的检查更坏）。
+  const checked = claims.filter((c) => c.unit in truth);
+  const wrong = checked.filter((c) => c.n !== truth[c.unit]);
+  if (wrong.length) {
+    bad(
+      `${wrong.length} 处 README 数量声称与真值不符`,
+      wrong.map((c) => `第 ${c.at} 行「${c.raw}」应为 ${truth[c.unit]}`).join('；')
+    );
+    console.log('    → README 是生成物：说明生成器模板里手抄了这个数字，加/删组件时它不会跟着动。');
+    console.log('      修法是把数字换成占位符（见 scripts/gen-docs.py 的 comp_count / ai_count），而不是手工改产物。');
+  } else if (checked.length) {
+    ok('README 数量声称与独立真值一致', checked.map((c) => `第 ${c.at} 行「${c.raw}」`).join('、'));
+  }
+
+  // ── 1e. 演示页 hero 文案声称了同一个数 —— 它是**手写**的，下一处漂的就是它 ──
+  // README 那个数已经由生成器算（comp_count / ai_count），演示页没有：文案在 .vue 源文件里，
+  // 加组件时没人会想起它。这里把「两处声称」钉在一起，任何一处掉了都会红。
+  const AI_DEMO = path.resolve(__dirname, '..', 'pages', 'demo', 'ai.vue');
+  const dm = /(\d+)\s*个面向大模型对话场景的组件/.exec(fs.readFileSync(AI_DEMO, 'utf8'));
+  if (!dm) {
+    bad(
+      'pages/demo/ai.vue 里找不到「N 个面向大模型对话场景的组件」',
+      '文案形态变了 —— 这条检查必须跟着改，否则它从此在空集上通过'
+    );
+  } else if (Number(dm[1]) !== truth['AI 组件']) {
+    bad(
+      `演示页 hero 文案写「${dm[1]} 个面向大模型对话场景的组件」，白名单里是 ${truth['AI 组件']} 个`,
+      '这一处没有生成器兜底，加组件时别只改 README 的来源'
+    );
+  } else {
+    ok('演示页 hero 文案与白名单一致', `${dm[1]} 个 AI 组件`);
+  }
 }
 
 // ── 2. 反向自检：对**真实源码**注入重复登记，必须判得出来 ────────────────
@@ -161,3 +224,33 @@ if (failed) {
   process.exit(1);
 }
 console.log('  CATEGORY 白名单校验通过。\n');
+
+// ── 工具 ──────────────────────────────────────────────────────────────────
+
+/**
+ * 抓出 README 里形如「N 个X」的数量声称。
+ *
+ * 形态覆盖（都来自真实 README）：
+ *   `49 个开箱即用的组件`（hero 行 —— 数字与单位之间还夹着修饰语）
+ *   `12 个 AI 组件`（特性列表）
+ *   `共 **49** 个组件、**298** 个属性、**75** 个事件。`（统计行 —— 数字被 `**` 包起来）
+ *
+ * 只认这四类单位。中文数字（「三个页面」）与「几个」不匹配，恰好避开；
+ * 其余「N 个…」多半是在说取值而不是计数（例如表格里「默认 48」）。
+ */
+function readmeClaims(text) {
+  const out = [];
+  // 中间的修饰语限长且不含标点：跨句/跨词组的误匹配会立刻暴露成对账失败，比放宽安全
+  const re = /(\d+)\s*(?:\*\*)?\s*个\s*([^\n，。；：、（）()]{0,8}?)(AI 组件|组件|属性|事件)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    out.push({
+      n: Number(m[1]),
+      unit: m[3],
+      // 原样回显这一句（去掉 `**`）—— 报错时让用户看到 README 里到底怎么写的，比拼接格式准
+      raw: m[0].replace(/\*/g, '').trim(),
+      at: text.slice(0, m.index).split('\n').length,
+    });
+  }
+  return out;
+}
