@@ -106,6 +106,26 @@
  * @event {Function} copy 代码块复制成功，参数为已复制内容
  * @event {Function} link 点击链接，参数为链接地址（组件已同时把地址复制到剪贴板）
  */
+
+/**
+ * 块级标记的**唯一来源**（模块级常量，主循环与列表续行判定共用同一组正则）。
+ *
+ * 为什么提到模块级：`parseBlocks` 的主循环里内联着这几个判定，而「列表项的续行该不该接」
+ * 需要问**同一批问题**（这行是不是别的块的开始）。在续行那里再抄一份正则，两处就会各自
+ * 演化 —— 本仓反复踩过的坑（同一件事写两遍，其中一份没跟上）。
+ */
+const MD_BLOCK = {
+	fence: /^\s*```\s*([\w+#.-]*)\s*$/,
+	fenceEnd: /^\s*```\s*$/,
+	heading: /^\s*(#{1,6})\s+(.*)$/,
+	quote: /^\s*>/,
+	hr: /^\s*(?:\*\s*){3,}$|^\s*(?:-\s*){3,}$|^\s*(?:_\s*){3,}$/,
+	tableStart: /^\s*\|/,
+	blank: /^\s*$/,
+	/** 有缩进**且**有内容 —— 列表续行的必要条件（只有空格的行算空行，不算续行） */
+	indented: /^[ \t]+\S/
+};
+
 export default {
 	name: 'VuiMarkdown',
 	emits: ['copy', 'link'],
@@ -239,13 +259,13 @@ export default {
 				let m;
 
 				/* 代码围栏 */
-				m = /^\s*```\s*([\w+#.-]*)\s*$/.exec(line);
+				m = MD_BLOCK.fence.exec(line);
 				if (m) {
 					flush();
 					const lang = m[1] || '';
 					const buf = [];
 					i++;
-					while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+					while (i < lines.length && !MD_BLOCK.fenceEnd.test(lines[i])) {
 						buf.push(lines[i]);
 						i++;
 					}
@@ -274,7 +294,7 @@ export default {
 				}
 
 				/* 标题 */
-				m = /^\s*(#{1,6})\s+(.*)$/.exec(line);
+				m = MD_BLOCK.heading.exec(line);
 				if (m) {
 					flush();
 					blocks.push({ type: 'h', level: m[1].length, text: m[2] });
@@ -283,7 +303,7 @@ export default {
 				}
 
 				/* 分隔线 */
-				if (/^\s*(?:\*\s*){3,}$/.test(line) || /^\s*(?:-\s*){3,}$/.test(line) || /^\s*(?:_\s*){3,}$/.test(line)) {
+				if (MD_BLOCK.hr.test(line)) {
 					flush();
 					blocks.push({ type: 'hr' });
 					i++;
@@ -291,10 +311,10 @@ export default {
 				}
 
 				/* 引用 */
-				if (/^\s*>/.test(line)) {
+				if (MD_BLOCK.quote.test(line)) {
 					flush();
 					const buf = [];
-					while (i < lines.length && /^\s*>/.test(lines[i])) {
+					while (i < lines.length && MD_BLOCK.quote.test(lines[i])) {
 						buf.push(lines[i].replace(/^\s*>\s?/, ''));
 						i++;
 					}
@@ -317,7 +337,7 @@ export default {
 							   （CommonMark 里空行只让列表变松散，不另起一个列表）。
 							   否则 `1. 甲` 空行 `2. 乙` 会被拆成两个列表、各自从 1 开始编号。 */
 							const nx = i + 1 < lines.length ? this.listItem(lines[i + 1]) : null;
-							if (/^\s*$/.test(lines[i]) && nx && nx.ordered === ordered) {
+							if (MD_BLOCK.blank.test(lines[i]) && nx && nx.ordered === ordered) {
 								i++;
 								continue;
 							}
@@ -338,8 +358,47 @@ export default {
 							num = lm.num === null ? (counters[level] || 0) + 1 : lm.num;
 							counters[level] = num;
 						}
+						/* ── 列表项的**续行** ──────────────────────────────────────────────
+						   紧跟在列表项后面、有缩进、又不是任何块级起点（也不是空行）的行，属于
+						   这一项的正文 —— 模型把一条长要点折行、或给某一步补一段说明，是这类语料里
+						   最常见的写法之一：
+
+						       - 第一步先装依赖，装完再执行下面那条命令，
+						         注意别在 root 下跑
+						       - 第二步……
+
+						   此前这类行会**把列表拦腰截断**：续行掉到列表外面变成一个独立段落
+						   （还带着源文件里的缩进空格），后面的项另起一个列表 —— 层级、编号、
+						   归属全散。这里把它接回上一项。
+						   - 用 `\n` 连接而不是空格：与段落一致（`paragraph.join('\n')`），
+						     且中文句子中间插一个空格比换行更难看；
+						   - **顶格**的非列表行不接（那多半是作者有意另起的话，宁可少接不可乱接）；
+						   - 缩进的块级起点（围栏 / 标题 / 分隔线 / 引用 / 表格行）不接 ——
+						     那属于「列表项里的嵌套块」，本组件不做半吊子支持。 */
+						let j = i + 1;
+						const cont = [];
+						while (j < lines.length) {
+							const nx = lines[j];
+							if (MD_BLOCK.blank.test(nx) || this.listItem(nx)) break;
+							if (!MD_BLOCK.indented.test(nx)) break;
+							if (
+								MD_BLOCK.fence.test(nx) ||
+								MD_BLOCK.heading.test(nx) ||
+								MD_BLOCK.hr.test(nx) ||
+								MD_BLOCK.quote.test(nx) ||
+								MD_BLOCK.tableStart.test(nx)
+							) {
+								break;
+							}
+							cont.push(nx.trim());
+							j++;
+						}
+						if (cont.length) {
+							text += '\n' + cont.join('\n');
+						}
 						items.push({ text, level, num, checked });
-						i++;
+						/* j 已经指向「下一项」或「第一个不是续行的行」；没有续行时 j === i + 1 */
+						i = j;
 					}
 					blocks.push({ type: 'list', ordered, items });
 					continue;

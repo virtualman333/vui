@@ -546,6 +546,129 @@ test('模板：`itemIndent` 挂上了，且勾选框与标记是二选一（不�
   );
 });
 
+// ── 7.5 列表项的续行 ──────────────────────────────────────────────────────
+//
+// 「模型把一条长要点折行」是这类语料里最常见的写法之一，此前它会**把列表拦腰截断**：
+// 续行掉到列表外面变成独立段落（还带着源文件里的缩进空格），后面的项另起一个列表。
+// 结构散掉，一个错都不报。
+
+test('列表项续行接回上一项，列表不再被拦腰截断', () => {
+  const md = '- 第一步先装依赖，装完再执行下面那条命令，\n  注意别在 root 下跑\n- 第二步';
+  const bs = blocks(md);
+  eq(bs.length, 1, '续行把列表拆成了「列表 + 段落 + 列表」三块（此前就是这个症状）');
+  eq(bs[0].type, 'list');
+  deepEq(
+    bs[0].items.map((it) => it.text),
+    ['第一步先装依赖，装完再执行下面那条命令，\n注意别在 root 下跑', '第二步'],
+    '续行没有接进上一项，或源文件里的缩进空格没被去掉'
+  );
+  eq(bs[0].items[0].level, 0, '续行把这一项的层级带跑了');
+});
+
+test('有序列表的续行不影响编号（还是 1. / 2.，不另起一块）', () => {
+  const md = '1. 第一步\n   需要保持缩进继续写\n2. 第二步';
+  const bs = blocks(md);
+  eq(bs.length, 1, '有序列表被续行拆开了');
+  deepEq(markers(md), ['1.', '2.'], '续行让编号错乱');
+  deepEq(
+    bs[0].items.map((it) => it.num),
+    [1, 2],
+    '编号被续行带偏'
+  );
+});
+
+test('续行里的行内语法照常解析（粗体 / 链接与段落同一套）', () => {
+  const md = '- 要点：**结论**在这里\n  参考 [文档](https://a.b/c) 第 3 节';
+  const segs = items(md)[0].segments;
+  ok(
+    segs.some((s) => s.type === 'bold' && s.text === '结论'),
+    '续行里的粗体没被解析 —— 用户会看到那对星号'
+  );
+  ok(
+    segs.some((s) => s.type === 'link' && s.url === 'https://a.b/c'),
+    '续行里的链接没被解析 —— 用户会看到 `[文本](地址)` 原文'
+  );
+});
+
+test('顶格的非列表行不接（作者有意另起一段，不是续行）', () => {
+  const md = '- 一项\n另起一段的正文\n\n- 又一项';
+  const bs = blocks(md);
+  ok(
+    bs.some((b) => b.type === 'p' && b.text === '另起一段的正文'),
+    '顶格的那行被吞进列表项了 —— 段落与列表的边界不该靠猜'
+  );
+});
+
+test('空行之后不接（松散列表的判定不受影响）', () => {
+  const md = '- 甲\n\n  这段是独立段落\n\n- 乙';
+  const bs = blocks(md);
+  ok(
+    bs.some((b) => b.type === 'p' && b.text.trim() === '这段是独立段落'),
+    '空行之后的缩进行被接进了上一项 —— 松散列表被改坏了'
+  );
+});
+
+test('缩进的**块级起点**不接：围栏 / 标题 / 分隔线 / 引用 / 表格行都仍是独立块', () => {
+  for (const [name, extra, kind] of [
+    ['围栏', '  ```js\n  a();\n  ```', 'code'],
+    ['标题', '  ## 小标题', 'h'],
+    ['分隔线', '  ---', 'hr'],
+    ['引用', '  > 引用一句', 'quote'],
+    ['表格行', '  | a | b |\n  | --- | --- |\n  | 1 | 2 |', 'table']
+  ]) {
+    const bs = blocks('- 用法：\n' + extra + '\n- 结束');
+    ok(
+      bs.some((b) => b.type === kind),
+      `缩进的${name}被当成续行吞进列表项了（本组件不支持「列表项里的嵌套块」，宁可少接不可乱接）`
+    );
+  }
+});
+
+test('嵌套列表仍然只认层级：子项不会被上一项的续行吃掉', () => {
+  const md = '- 一级 A\n  一级 A 的续行\n  - 二级 A1\n- 一级 B';
+  const bs = blocks(md);
+  eq(bs.length, 1, '嵌套列表被拆开了');
+  deepEq(levels(md), [0, 1, 0], '层级不对（续行不该另起一项）');
+  eq(bs[0].items[0].text, '一级 A\n一级 A 的续行', '续行没接在第一个一级项上');
+});
+
+test('结构锁：块级标记**只有一份** —— 改掉它，主循环与续行判定会一起变', () => {
+  /* 这条锁不读源码形态（那种断言会被一行注释或另一处等价写法骗过），而是**真的把
+     MD_BLOCK.hr 改成永不匹配**再问两个调用方：
+       ① 主循环还认不认分隔线（`---` 那一行会退回普通段落）；
+       ② 续行判定还排不排除分隔线（`  ---` 会被当成续行接进列表项）。
+     两处都随这一个常量变 = 它们共用同一份判据；任何一处改成内联正则，这里就会红。 */
+  const file = path.join(root, 'uni_modules/vui-markdown/components/vui-markdown/vui-markdown.vue');
+  const raw = fs.readFileSync(file, 'utf8');
+  const { descriptor } = parse(raw, { filename: 'vui-markdown.vue' });
+  const code = descriptor.script.content;
+  /* 「永不匹配」的正则写 `/(?!)/`。**别写 `/$^/`**：空串同时是其起止位置，`$^` 会匹配空行 ——
+     第一版就栽在这（空白行全变成了 hr 块，看起来像「补丁没生效」，实则是补丁选错了哨兵）。 */
+  const patched = code.replace(/\thr: \/[^\n]*\n/, '\thr: /(?!)/,\n');
+  ok(patched !== code, '没能在源码里找到 MD_BLOCK.hr 的定义 —— 常量被改名了？本条锁需要同步');
+  /* 注意别用 `!/hr: \//` 判「补丁生效」：补丁文本本身就带着 `hr: /` 开头，
+     那样写必然误红（第一版也栽在这）。改成看补丁后的字面量在不在。 */
+  ok(patched.includes('hr: /(?!)/'), '打补丁没生效（MD_BLOCK.hr 还是原样）');
+  ok(!patched.includes('(?:\\*\\s*){3,}'), '补丁后原正则片段仍在 —— 打到了别的地方');
+
+  const mod = { exports: {} };
+  new Function('module', 'exports', patched.replace(/^export default\b/m, 'module.exports ='))(mod, mod.exports);
+  const o = mod.exports;
+  const b2 = (md) => {
+    const c = Object.assign({}, propsDefault, o.data(), o.methods, { content: md });
+    return o.computed.blocks.call(c);
+  };
+
+  deepEq(
+    types(b2('甲\n\n---\n\n乙')),
+    ['p', 'p', 'p'],
+    '改掉 MD_BLOCK.hr 之后主循环仍然认分隔线 —— 说明主循环另有一份判据'
+  );
+  const bs = b2('- 用法：\n  ---\n- 结束');
+  eq(bs.length, 1, '改掉 MD_BLOCK.hr 之后 `  ---` 仍被排除在续行之外 —— 续行判定另有一份判据');
+  eq(bs[0].items[0].text, '用法：\n---', '续行判定没有随 MD_BLOCK.hr 一起变');
+});
+
 // ── 汇总 ──────────────────────────────────────────────────────────────────
 
 console.log('');
