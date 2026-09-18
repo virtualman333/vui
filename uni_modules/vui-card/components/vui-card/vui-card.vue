@@ -27,6 +27,10 @@
  * @property {Boolean} border 是否显示边框
  * @property {String} padding 内容内边距
  * @property {String} radius 圆角
+ * @slot header 头部内容，覆盖 title
+ * @slot extra 头部右侧附加内容，覆盖 extra
+ * @slot default 卡片主体内容
+ * @slot footer 卡片底部，仅在传入该插槽时渲染
  */
 export default {
 	name: 'VuiCard',

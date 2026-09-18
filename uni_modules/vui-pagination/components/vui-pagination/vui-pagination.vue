@@ -38,6 +38,7 @@ const VUI_COLOR = {
  * @property {Boolean} showTotal 是否显示总条数
  * @property {String} prevText 上一页文本
  * @property {String} nextText 下一页文本
+ * @property {String} color 当前页高亮色，默认取主题主色
  * @event {Function} change 页码变化时触发
  */
 export default {

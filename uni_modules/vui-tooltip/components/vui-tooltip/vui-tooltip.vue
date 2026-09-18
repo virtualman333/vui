@@ -27,6 +27,8 @@
  * @property {String} trigger 触发方式 click / hover（hover 仅 H5 生效）
  * @property {Boolean} modelValue 是否显示，支持 v-model
  * @event {Function} change 显示状态变化时触发
+ * @slot default 触发元素
+ * @slot content 提示内容，覆盖 content
  */
 export default {
 	name: 'VuiTooltip',

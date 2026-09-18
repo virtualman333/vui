@@ -78,6 +78,12 @@
 | --- | --- |
 | `click` | 点击按钮时触发 |
 
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 按钮内容 |
+
 ### vui-icon
 
 **Icon 图标**
@@ -96,6 +102,12 @@
 | --- | --- |
 | `click` | 点击图标触发 |
 
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 图标内容，覆盖 name / char 渲染出的字符 |
+
 ### vui-tag
 
 **Tag 标签**
@@ -104,11 +116,12 @@
 | --- | --- | --- | --- |
 | type | `string` | `'default'` | = [default\|primary\|success｜warning｜error]  颜色类型 |
 | size | `string` | `'normal'` | = [default\|small\|mini] 大小尺寸 |
+| text | `string` | `''` | 标签内容 |
 | disabled | `any` | `false` | = [true\|false] 是否为禁用状态 |
 | inverted | `any` | `false` | = [true\|false] 是否无需背景颜色（空心标签） |
 | circle | `any` | `false` | = [true\|false] 是否为圆角 |
-| mark | `any` | `false` |  |
-| customStyle | `string` | `''` |  |
+| mark | `any` | `false` | = [true\|false] 是否为标记样式（左侧直角、右侧圆角） |
+| customStyle | `string` | `''` | 自定义样式，直接挂到根节点的 style 上 |
 
 **事件**
 
@@ -128,6 +141,15 @@
 | border | `boolean` | `false` | 是否显示边框 |
 | padding | `string` | `'24rpx'` | 内容内边距 |
 | radius | `string` | `'16rpx'` | 圆角 |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `header` | — | 头部内容，覆盖 title |
+| `extra` | — | 头部右侧附加内容，覆盖 extra |
+| `default` | — | 卡片主体内容 |
+| `footer` | — | 卡片底部，仅在传入该插槽时渲染 |
 
 ### vui-image
 
@@ -198,7 +220,7 @@
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | modelValue | `boolean` | `false` | 是否选中，支持 v-model |
-| label | `string` | `''` | 文本內容 |
+| label | `string` | `''` | 文本内容 |
 | disabled | `boolean` | `false` | 是否禁用 |
 | color | `string` | `''` | 选中颜色 |
 | shape | `string` | `'circle'` | 形状 circle / square |
@@ -209,6 +231,12 @@
 | 事件名 | 说明 |
 | --- | --- |
 | `change` | 选中状态变化时触发 |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 单选框文本，覆盖 label |
 
 ### vui-checkbox
 
@@ -228,6 +256,12 @@
 | 事件名 | 说明 |
 | --- | --- |
 | `change` | 选中状态变化时触发 |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 复选框文本，覆盖 label |
 
 ### vui-switch
 
@@ -276,6 +310,12 @@
 | labelWidth | `string` | `'160rpx'` | 标签宽度 |
 | labelPosition | `string` | `'left'` | 标签位置 left / top |
 
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 表单内容（若干 vui-form-item） |
+
 ### vui-form-item
 
 **Form Item 表单项**
@@ -285,6 +325,12 @@
 | label | `string` | `''` | 标签文本 |
 | prop | `string` | `''` | 对应 model 中的字段名 |
 | required | `boolean` | `false` | 是否必填（也可由 rules 推导） |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 表单项的控件 |
 
 ### vui-slider
 
@@ -321,7 +367,7 @@
 | preview | `boolean` | `true` | 是否可预览 |
 | size | `string` | `'160rpx'` | 单文件大小，默认 160rpx |
 | name | `string` | `'file'` | 上传时的文件字段名 |
-| header | `Object` | `({})` |  |
+| header | `Object` | `({})` | 上传请求头，透传给 uni.uploadFile 的 header |
 
 **事件**
 
@@ -406,6 +452,12 @@
 | --- | --- |
 | `row-click` | 点击行时触发 |
 
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `column.key` | `row, index` | 自定义该列单元格；插槽名取该列的 column.key（key 为 name 时写 #name） |
+
 ### vui-pagination
 
 **Pagination 分页**
@@ -419,7 +471,7 @@
 | showTotal | `boolean` | `false` | 是否显示总条数 |
 | prevText | `string` | `'‹'` | 上一页文本 |
 | nextText | `string` | `'›'` | 下一页文本 |
-| color | `string` | `''` |  |
+| color | `string` | `''` | 当前页高亮色，默认取主题主色 |
 
 **事件**
 
@@ -520,6 +572,12 @@
 | --- | --- |
 | `change` | 展开状态变化时触发 |
 
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `content` | `item, index` | 面板内容，覆盖 items[].content |
+
 ### vui-calendar
 
 **Calendar 日历**
@@ -550,6 +608,12 @@
 | barSize | `string` | `'8rpx'` | 滚动条厚度 |
 | color | `string` | `''` | 滚动条颜色 |
 
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 滚动内容 |
+
 ### vui-auto-scroll
 
 **Auto Scroll 自动滚动**
@@ -560,6 +624,12 @@
 | width | `string` | `''` | 容器宽度（CSS 值） |
 | height | `string` | `''` | 容器高度（CSS 值） |
 | scrollViewHeight | `string` | `''` | 内层 scroll-view 高度（CSS 值） |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | `item` | 每一项的内容 |
 
 ---
 
@@ -617,7 +687,7 @@
 | confirmText | `string` | `'确定'` | 确定按钮文案 |
 | maskClosable | `boolean` | `true` | 点击遮罩是否关闭 |
 | width | `string` | `'560rpx'` | 对话框宽度 |
-| color | `string` | `''` |  |
+| color | `string` | `''` | 确定按钮背景色，默认取主题主色 |
 
 **事件**
 
@@ -626,6 +696,13 @@
 | `confirm` | 点击确定时触发 |
 | `cancel` | 点击取消时触发 |
 | `close` | — |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 对话框内容，覆盖 content |
+| `footer` | — | 底部按钮区，覆盖默认的取消 / 确定按钮 |
 
 ### vui-drawer
 
@@ -647,6 +724,12 @@
 | --- | --- |
 | `close` | 关闭时触发 |
 | `change` | — |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 抽屉主体内容（放在 scroll-view 里） |
 
 ### vui-loading
 
@@ -679,6 +762,13 @@
 | --- | --- |
 | `change` | 显示状态变化时触发 |
 
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 触发元素 |
+| `content` | — | 提示内容，覆盖 content |
+
 ### vui-popover
 
 **Popover 弹出框**
@@ -698,6 +788,13 @@
 | --- | --- |
 | `change` | 显示状态变化时触发 |
 
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 触发元素 |
+| `content` | — | 弹出内容，覆盖 content |
+
 ### vui-backtop
 
 **Backtop 回到顶部**
@@ -716,6 +813,12 @@
 | 事件名 | 说明 |
 | --- | --- |
 | `click` | 点击时触发 |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 按钮内容，覆盖默认的 ↑ 图标与 text 文案 |
 
 ---
 
@@ -775,6 +878,14 @@
 | --- | --- |
 | `click` | 点击气泡时触发 |
 | `longpress` | 长按气泡时触发 |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `avatar` | — | 头像区域，覆盖 avatar 图片与首字占位 |
+| `default` | — | 消息主体，覆盖 content |
+| `footer` | — | 气泡底部附加区域（时间行右侧） |
 
 ### vui-chat-input
 
@@ -848,6 +959,12 @@
 | `update` | :modelValue 展开状态变化 |
 | `toggle` | 展开状态变化时触发，参数为当前是否展开 |
 
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 推理正文，覆盖 content |
+
 ### vui-feedback
 
 **Feedback 回答评价**
@@ -868,6 +985,12 @@
 | `change` | 评价变化时触发，参数为当前值 |
 | `like` | 选中赞同 |
 | `dislike` | 选中不赞同 |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `default` | — | 评价按钮右侧的附加内容 |
 
 ### vui-copy
 
@@ -1015,4 +1138,10 @@
 | 事件名 | 说明 |
 | --- | --- |
 | `select` | 点击某条来源时触发，参数为 (来源对象, 从 0 开始的索引) |
+
+**插槽**
+
+| 插槽名 | 作用域 | 说明 |
+| --- | --- | --- |
+| `title` | — | 列表标题，覆盖 title 与条数角标 |
 

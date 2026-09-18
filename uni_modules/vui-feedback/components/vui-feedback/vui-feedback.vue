@@ -35,6 +35,7 @@
  * @event {Function} change 评价变化时触发，参数为当前值
  * @event {Function} like 选中赞同
  * @event {Function} dislike 选中不赞同
+ * @slot default 评价按钮右侧的附加内容
  */
 export default {
 	name: 'VuiFeedback',

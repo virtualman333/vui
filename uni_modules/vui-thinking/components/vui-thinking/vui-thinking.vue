@@ -30,6 +30,7 @@
  * @property {Boolean} defaultExpand 初始是否展开
  * @event {Function} update:modelValue 展开状态变化
  * @event {Function} toggle 展开状态变化时触发，参数为当前是否展开
+ * @slot default 推理正文，覆盖 content
  */
 export default {
 	name: 'VuiThinking',

@@ -61,6 +61,7 @@
  * @property {String} emptyText 无来源时的占位文案
  * @property {Boolean} clickable 是否可点击，默认 true
  * @event {Function} select 点击某条来源时触发，参数为 (来源对象, 从 0 开始的索引)
+ * @slot title 列表标题，覆盖 title 与条数角标
  */
 export default {
 	name: 'VuiSourceList',

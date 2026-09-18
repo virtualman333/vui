@@ -23,12 +23,13 @@ const VUI_COLOR = {
  * Radio 单选框
  * @description 单选框，支持 v-model
  * @property {Boolean} modelValue 是否选中，支持 v-model
- * @property {String} label 文本內容
+ * @property {String} label 文本内容
  * @property {Boolean} disabled 是否禁用
  * @property {String} color 选中颜色
  * @property {String} shape 形状 circle / square
  * @property {Number|String} size 图标尺寸，数字按 rpx 处理，默认 36
  * @event {Function} change 选中状态变化时触发
+ * @slot default 单选框文本，覆盖 label
  */
 export default {
 	name: 'VuiRadio',

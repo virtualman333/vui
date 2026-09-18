@@ -44,6 +44,7 @@
  * @property {Boolean} stripe 是否显示斑马纹
  * @property {String} emptyText 空数据文案
  * @event {Function} row-click 点击行时触发
+ * @slot column.key {row, index} 自定义该列单元格；插槽名取该列的 column.key（key 为 name 时写 #name）
  */
 export default {
 	name: 'VuiTable',

@@ -245,7 +245,7 @@ $vui-primary: #7166f0;
 
 ## 组件总览
 
-共 **49** 个组件、**307** 个属性、**77** 个事件。
+共 **49** 个组件、**308** 个属性、**77** 个事件。
 完整 API（属性 / 事件 / 插槽）见 [docs/API.md](docs/API.md)。
 
 ### 基础组件
@@ -254,7 +254,7 @@ $vui-primary: #7166f0;
 | --- | --- | --- | --- |
 | `<vui-button>` | 按钮 | easycom 自动 | `type` |
 | `<vui-icon>` | 图标 | easycom 自动 | `name`, `char`, `size`, `color`, `spin` |
-| `<vui-tag>` | 标签 | easycom 自动 | `type`, `size`, `disabled`, `inverted`, `circle` |
+| `<vui-tag>` | 标签 | easycom 自动 | `type`, `size`, `text`, `disabled`, `inverted` |
 | `<vui-card>` | 卡片 | easycom 自动 | `title`, `extra`, `shadow`, `border`, `padding` |
 | `<vui-image>` | 图片 | easycom 自动 | `src`, `mode`, `width`, `height`, `radius` |
 | `<vui-header>` | 头部标题 | easycom 自动 | `title` |

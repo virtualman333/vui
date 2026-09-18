@@ -72,6 +72,38 @@ def split_top_level(body):
     return parts
 
 
+def drop_leading_comment_lines(seg):
+    """去掉段首那些**整行都是注释**的行，返回剩下的正文。
+
+    为什么必须有这一步
+    ------------------
+    段是按顶层逗号切的，而「prop 上面单独一行写 `// 说明`」这种写法会让那行注释
+    **跟着下一个 prop 一起被切进同一段**。旧实现是 `if seg.startswith('//'): continue`
+    —— 于是整段被当成注释丢掉，**那个 prop 连同它的注释一起从产物里消失**。
+
+    实测（本文件与 gen-docs.py 同源同一处）：vui-tag 的 `text` prop 因为上面有一行
+    `// 标签内容`，从 `types/index.d.ts` 与 `docs/API.md` 里**静默消失了很久** ——
+    TS 用户写 `<vui-tag text="x">` 没有类型提示，API 文档里也查不到这个属性，
+    而所有检查一路全绿。
+
+    只剔「整行都是注释」的行，不做全文替换：`default: 'https://…'` 这类值里
+    也会出现 `//`，按行首判据不会误伤它。
+
+    ⚠ 段首还可能是**空行**（段是按逗号切的，闭括号后面紧跟着换行）。
+    第一版没跳过空行，`' '.strip() == ''` 不以 `//` 开头，循环当场就 break 了 ——
+    补丁看起来改了、`vui-tag.text` 依然不见。判据要写成「空行 或 注释行」。
+    """
+    lines = seg.split('\n')
+    i = 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if not s or s.startswith('//') or (s.startswith('/*') and s.endswith('*/')):
+            i += 1
+            continue
+        break
+    return '\n'.join(lines[i:])
+
+
 def parse_props(script):
     """解析选项式 props 定义 -> [(name, tstype, default_repr)]"""
     m = re.search(r'\bprops\s*:\s*\{', script)
@@ -85,8 +117,8 @@ def parse_props(script):
 
     out = []
     for seg in split_top_level(body):
-        seg = seg.strip()
-        if not seg or seg.startswith('//'):
+        seg = drop_leading_comment_lines(seg).strip()
+        if not seg:
             continue
         mm = re.match(r'^([A-Za-z_$][\w$]*)\s*:\s*(.+)$', seg, re.S)
         if not mm:

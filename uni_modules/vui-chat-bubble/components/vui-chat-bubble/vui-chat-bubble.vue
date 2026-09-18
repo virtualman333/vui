@@ -49,6 +49,9 @@
  * @property {Boolean} selectable 文字是否可选中
  * @event {Function} click 点击气泡时触发
  * @event {Function} longpress 长按气泡时触发
+ * @slot avatar 头像区域，覆盖 avatar 图片与首字占位
+ * @slot default 消息主体，覆盖 content
+ * @slot footer 气泡底部附加区域（时间行右侧）
  */
 export default {
 	name: 'VuiChatBubble',

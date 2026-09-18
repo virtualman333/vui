@@ -29,6 +29,7 @@
  * @property {Boolean} mask 是否显示遮罩
  * @property {Boolean} maskClosable 点击遮罩是否关闭
  * @event {Function} close 关闭时触发
+ * @slot default 抽屉主体内容（放在 scroll-view 里）
  */
 export default {
 	name: 'VuiDrawer',

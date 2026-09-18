@@ -27,6 +27,7 @@
  * @property {Boolean} preview 是否可预览
  * @property {String} size 单文件大小，默认 160rpx
  * @property {String} name 上传时的文件字段名
+ * @property {Object} header 上传请求头，透传给 uni.uploadFile 的 header
  * @event {Function} change 文件列表变化时触发
  * @event {Function} success 上传成功时触发
  * @event {Function} error 上传失败时触发

@@ -30,6 +30,7 @@ const VUI_COLOR = {
  * @property {String} color 选中颜色
  * @property {Number|String} size 图标尺寸，数字按 rpx 处理，默认 36
  * @event {Function} change 选中状态变化时触发
+ * @slot default 复选框文本，覆盖 label
  */
 export default {
 	name: 'VuiCheckbox',

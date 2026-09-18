@@ -28,6 +28,8 @@
  * @property {Boolean} mask 是否显示遮罩
  * @property {String} width 弹出框宽度
  * @event {Function} change 显示状态变化时触发
+ * @slot default 触发元素
+ * @slot content 弹出内容，覆盖 content
  */
 export default {
 	name: 'VuiPopover',

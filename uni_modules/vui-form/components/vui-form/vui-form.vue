@@ -12,6 +12,7 @@
  * @property {Object} rules 表单校验规则 {prop: [{required, message, pattern, min, max, validator, trigger}]}
  * @property {String} labelWidth 标签宽度
  * @property {String} labelPosition 标签位置 left / top
+ * @slot default 表单内容（若干 vui-form-item）
  * @method validate() 整体校验，返回 Promise<boolean>
  * @method validateField(props) 校验指定字段
  * @method resetFields() 重置表单

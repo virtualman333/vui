@@ -18,6 +18,7 @@
  * @property {Number} duration 回到顶部的动画时长
  * @property {String} text 按钮文案
  * @event {Function} click 点击时触发
+ * @slot default 按钮内容，覆盖默认的 ↑ 图标与 text 文案
  */
 export default {
 	name: 'VuiBacktop',

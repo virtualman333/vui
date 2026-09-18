@@ -12,6 +12,14 @@ TYPE_MAP = {'String': 'string', 'Number': 'number', 'Boolean': 'boolean',
             'Array': 'Array', 'Object': 'Object', 'Function': 'Function'}
 PASCAL = lambda k: ''.join(w.capitalize() for w in k.split('-'))
 
+# JSDoc 里的插槽登记：`@slot [名称] [{作用域参数}] 说明`
+#   · 名称可省（省掉就当默认插槽），允许点号 —— `column.key` 这类「列名即插槽名」的写法；
+#   · 作用域参数写在一对花括号里（`{item}` / `{row, index}`），没有就不写；
+#   · 说明是散文，不参与对账（对账只钉名称与作用域参数这些**结构化**的部分）。
+# ⚠ 这份正则与 scripts/check-api.js 里的 SLOT_RE **必须逐字一致**：check:api 会拿本脚本
+#   生成的 docs/API.md 反向与源码对账，两边一旦漂移，check:all 立刻红。
+SLOT_RE = r'@slot\s*([A-Za-z_$][\w$.-]*)?\s*(?:\{([^}]*)\})?\s*(.*)'
+
 CATEGORY = {
     '基础组件': ['vui-button', 'vui-icon', 'vui-tag', 'vui-card', 'vui-image', 'vui-header'],
     '表单组件': ['vui-input', 'vui-radio', 'vui-checkbox', 'vui-switch', 'vui-select',
@@ -78,6 +86,31 @@ def split_top_level(body):
     return parts
 
 
+def drop_leading_comment_lines(seg):
+    """去掉段首那些**整行都是注释**的行，返回剩下的正文。
+
+    与 gen-package.py 里同名函数同源、同修：段是按顶层逗号切的，
+    「prop 上面单独一行写 `// 说明`」会让那行注释跟着下一个 prop 一起被切进同一段，
+    旧实现 `if seg.startswith('//'): continue` 于是把**整个 prop 丢掉**。
+    实测 vui-tag 的 `text` 就是这么从 docs/API.md 的属性表里消失的。
+
+    只剔「整行都是注释」的行，不做全文替换 —— `default: 'https://…'` 这类值里
+    也含 `//`，按行首判据不会误伤它。
+
+    ⚠ 段首还可能是**空行**（段是按逗号切的）。第一版没跳过空行，
+    `''.startswith('//')` 为假、循环当场 break，`vui-tag.text` 依然不见。
+    """
+    lines = seg.split('\n')
+    i = 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if not s or s.startswith('//') or (s.startswith('/*') and s.endswith('*/')):
+            i += 1
+            continue
+        break
+    return '\n'.join(lines[i:])
+
+
 def parse_props(script):
     m = re.search(r'\bprops\s*:\s*\{', script)
     if not m:
@@ -88,8 +121,8 @@ def parse_props(script):
         return []
     out = []
     for seg in split_top_level(script[brace + 1:end]):
-        seg = seg.strip()
-        if not seg or seg.startswith('//'):
+        seg = drop_leading_comment_lines(seg).strip()
+        if not seg:
             continue
         mm = re.match(r'^([A-Za-z_$][\w$]*)\s*:\s*(.+)$', seg, re.S)
         if not mm:
@@ -133,8 +166,9 @@ def parse_jsdoc(t):
     for em in re.finditer(r'@event\s*\{[^}]*\}\s*([A-Za-z_$][\w$-]*)\s*(.*)', doc):
         events.append((em.group(1), em.group(2).strip()))
     slots = []
-    for sm_ in re.finditer(r'@slot\s*([A-Za-z_$][\w$-]*)?\s*(.*)', doc):
-        slots.append((sm_.group(1) or 'default', sm_.group(2).strip()))
+    for sm_ in re.finditer(SLOT_RE, doc):
+        slots.append(((sm_.group(1) or 'default'), (sm_.group(2) or '').strip(),
+                      sm_.group(3).strip()))
     return desc, props, events, slots
 
 
@@ -213,10 +247,11 @@ for cat, ids in CATEGORY.items():
         if c['slots']:
             api.append('**插槽**')
             api.append('')
-            api.append('| 插槽名 | 说明 |')
-            api.append('| --- | --- |')
-            for sn, sc in c['slots']:
-                api.append('| `%s` | %s |' % (sn, sc or '—'))
+            api.append('| 插槽名 | 作用域 | 说明 |')
+            api.append('| --- | --- | --- |')
+            for sn, scope, sc in c['slots']:
+                api.append('| `%s` | %s | %s |'
+                           % (sn, ('`%s`' % scope) if scope else '—', sc or '—'))
             api.append('')
 
 os.makedirs('docs', exist_ok=True)
@@ -242,6 +277,7 @@ for cat, ids in CATEGORY.items():
 
 total_props = sum(len(c['props']) for c in COMPS.values())
 total_events = sum(len(c['events']) for c in COMPS.values())
+total_slots = sum(len(c['slots']) for c in COMPS.values())
 
 README = """# Virtual UI (VUI)
 
@@ -636,4 +672,4 @@ readme = README % {
 
 open('README.md', 'w', encoding='utf-8', newline='\n').write(readme)
 print('README.md 行数:', readme.count('\n') + 1)
-print('组件数:', len(COMPS), '属性数:', total_props, '事件数:', total_events)
+print('组件数:', len(COMPS), '属性数:', total_props, '事件数:', total_events, '插槽数:', total_slots)

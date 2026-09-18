@@ -23,6 +23,7 @@
  * @property {Boolean} accordion 是否手风琴模式（同时只展开一个）
  * @property {Boolean} arrow 是否显示箭头
  * @event {Function} change 展开状态变化时触发
+ * @slot content {item, index} 面板内容，覆盖 items[].content
  */
 export default {
 	name: 'VuiCollapse',

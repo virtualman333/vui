@@ -51,6 +51,8 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { listComponents } = require('./lib/components');
+const { scriptBlock, stripComments, templateBlock } = require('./lib/source');
 
 const root = path.resolve(__dirname, '..');
 const MODULES = path.join(root, 'uni_modules');
@@ -61,73 +63,11 @@ const MODULES = path.join(root, 'uni_modules');
  */
 const BASELINE = {};
 
-/** 剥掉 `//` 行注释、`/* *\/` 块注释与 `<!-- -->` HTML 注释，并保护字符串字面量。 */
-function stripComments(src) {
-  let out = '';
-  let i = 0;
-  let quote = null;
-  while (i < src.length) {
-    const c = src[i];
-    const n = src[i + 1];
-    if (quote) {
-      if (c === '\\') {
-        out += c + (n === undefined ? '' : n);
-        i += 2;
-        continue;
-      }
-      if (c === quote) quote = null;
-      out += c;
-      i++;
-      continue;
-    }
-    if (c === '"' || c === "'" || c === '`') {
-      quote = c;
-      out += c;
-      i++;
-      continue;
-    }
-    if (c === '/' && n === '/') {
-      while (i < src.length && src[i] !== '\n') i++;
-      continue;
-    }
-    if (c === '/' && n === '*') {
-      i += 2;
-      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
-      i += 2;
-      continue;
-    }
-    // HTML 注释（模板块里）
-    if (c === '<' && src.startsWith('<!--', i)) {
-      const end = src.indexOf('-->', i);
-      i = end === -1 ? src.length : end + 3;
-      continue;
-    }
-    out += c;
-    i++;
-  }
-  return out;
-}
-
-/** 取 `<script>` 块（保留注释，供 JSDoc 判定用）；取不到返回 null */
-function scriptBlock(raw) {
-  const m = /<script[^>]*>([\s\S]*?)<\/script>/.exec(raw);
-  return m ? m[1] : null;
-}
-
 /**
- * 取根 `<template>` 块。不能简单用非贪婪匹配到第一个 `</template>`：
- * 组件里普遍有 `<template v-if>` 子块，那样会截断。根块固定在最外层，
- * 因此取「第一个 `<template`」到「`<script` 之前的最后一个 `</template>`」。
+ * ⚠ `stripComments` / `scriptBlock` / `templateBlock` 三个解析函数已经搬到
+ * `scripts/lib/source.js` —— 第 23 轮的 `check-api.js` 要用同一套，
+ * 再抄一份就是「同一事实写两处」。改这里等于同时改两个检查。
  */
-function templateBlock(raw) {
-  const start = raw.indexOf('<template');
-  if (start === -1) return null;
-  const scriptAt = raw.indexOf('<script');
-  const region = scriptAt === -1 ? raw : raw.slice(0, scriptAt);
-  const end = region.lastIndexOf('</template>');
-  if (end === -1 || end <= start) return null;
-  return raw.slice(start, end + '</template>'.length);
-}
 
 /** 行号：在原文里找第 n 次出现的位置 */
 const lineOf = (text, idx) => text.slice(0, idx).split('\n').length;
@@ -338,11 +278,15 @@ function checkNpmrc() {
 
 // ── 扫描 ────────────────────────────────────────────────────────────────
 
-const components = fs
-  .readdirSync(MODULES, { withFileTypes: true })
-  .filter((e) => e.isDirectory() && e.name.startsWith('vui-'))
-  .map((e) => e.name)
-  .sort();
+/* 组件枚举走 scripts/lib/components.js —— 本文件此前自己 readdirSync 拼了一份（第 23 轮收敛）。
+   那边的约定是**枚举永不静默丢弃**：目录在、同名 .vue 不在，返回一条 `hasVue: false` 的条目，
+   由调用方报错，而不是把它从集合里移走、让分母变小。这里就按这个约定办。 */
+const entries = listComponents();
+const components = [...new Set(entries.map((e) => e.id))].sort();
+/** 结构坏掉的条目（缺 components/ 或缺同名 .vue）—— 不能让它们静默退出扫描面 */
+const structProblems = entries
+  .filter((e) => !e.hasVue)
+  .map((e) => `${e.id}: 取不到 components/${e.comp || e.id}/${e.comp || e.id}.vue（${e.problem}）`);
 
 const found = [];
 let scanned = 0;
@@ -358,16 +302,16 @@ const coverage = {
   emitNamesFired: 0,
 };
 
-for (const c of components) {
-  const dir = path.join(MODULES, c, 'components', c);
-  if (!fs.existsSync(dir)) continue;
-  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.vue'))) {
-    const raw = fs.readFileSync(path.join(dir, f), 'utf8');
+for (const e of entries) {
+  if (!e.hasVue) continue;
+  const cid = e.id;
+  for (const f of [path.basename(e.vue)]) {
+    const raw = fs.readFileSync(e.vue, 'utf8');
     scanned++;
     const script = scriptBlock(raw);
     const tpl = templateBlock(raw);
-    if (!script) coverage.noScript.push(`${c}/${f}`);
-    if (!tpl) coverage.noTemplate.push(`${c}/${f}`);
+    if (!script) coverage.noScript.push(`${cid}/${f}`);
+    if (!tpl) coverage.noTemplate.push(`${cid}/${f}`);
     if (script) {
       const s = stripComments(script);
       const decl = declaredEmits(s);
@@ -381,7 +325,7 @@ for (const c of components) {
     }
     for (const r of RULES) {
       for (const v of r.run({ raw, script, tpl }) || []) {
-        found.push({ comp: c, file: `${c}/${f}`, rule: r, ...v, key: `${c}|${r.id}` });
+        found.push({ comp: cid, file: `${cid}/${f}`, rule: r, ...v, key: `${cid}|${r.id}` });
       }
     }
   }
@@ -462,6 +406,14 @@ if (coverage.noScript.length || coverage.noTemplate.length) {
   console.log('      改法：确认文件结构正常（AGENTS.md 第三节），或同步修本脚本的块提取');
 }
 
+/* 结构坏掉的组件：枚举按「永不静默丢弃」交出来了，这里必须显式失败 ——
+   否则它们会连扫描面一起退出，规则在缩小的集合上照样判绿。 */
+if (structProblems.length) {
+  console.log(`\n  x 有组件目录结构坏了（枚举没有静默丢弃它们）：`);
+  for (const p of structProblems) console.log(`      ${p}`);
+  console.log('      改法：目录必须严格一致（AGENTS.md 第三节），细项见 check:components');
+}
+
 /* 事件名对账的扫描面：解析不出任何事件名时，双向对账都是恒真 —— 必须当作失败 */
 const emitsScanDead = coverage.emitNamesDeclared === 0 || coverage.emitNamesFired === 0;
 if (emitsScanDead) {
@@ -478,6 +430,7 @@ if (
   stale.length ||
   coverage.noScript.length ||
   coverage.noTemplate.length ||
+  structProblems.length ||
   emitsScanDead
 ) {
   console.log('\n规则执行器校验未通过。\n');

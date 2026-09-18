@@ -40,8 +40,11 @@ const VUI_COLOR = {
  * @property {String} confirmText 确定按钮文案
  * @property {Boolean} maskClosable 点击遮罩是否关闭
  * @property {String} width 对话框宽度
+ * @property {String} color 确定按钮背景色，默认取主题主色
  * @event {Function} confirm 点击确定时触发
  * @event {Function} cancel 点击取消时触发
+ * @slot default 对话框内容，覆盖 content
+ * @slot footer 底部按钮区，覆盖默认的取消 / 确定按钮
  */
 export default {
 	name: 'VuiModal',

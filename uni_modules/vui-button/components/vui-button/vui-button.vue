@@ -11,6 +11,7 @@
  * @description 常用操作按钮，通过 type 切换配色
  * @property {String} type 按钮类型 default / primary / success / warning / error
  * @event {Function} click 点击按钮时触发
+ * @slot default 按钮内容
  */
 export default {
 	name: 'VuiButton',

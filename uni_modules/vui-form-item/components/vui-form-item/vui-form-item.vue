@@ -17,6 +17,7 @@
  * @property {String} label 标签文本
  * @property {String} prop 对应 model 中的字段名
  * @property {Boolean} required 是否必填（也可由 rules 推导）
+ * @slot default 表单项的控件
  * @method validate() 校验当前项
  * @method resetField() 重置当前项
  * @method clearValidate() 清空校验信息

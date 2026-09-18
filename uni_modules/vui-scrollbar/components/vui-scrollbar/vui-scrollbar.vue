@@ -35,6 +35,7 @@ const VUI_COLOR = {
  * @property {Boolean} always 是否常显滚动条
  * @property {String} barSize 滚动条厚度
  * @property {String} color 滚动条颜色
+ * @slot default 滚动内容
  */
 export default {
 	name: 'VuiScrollbar',

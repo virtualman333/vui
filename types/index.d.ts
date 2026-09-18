@@ -656,7 +656,7 @@ export interface VuiModalProps {
 	maskClosable?: boolean;
 	/** 对话框宽度 */
 	width?: string;
-	/** */
+	/** 确定按钮背景色，默认取主题主色 */
 	color?: string;
 }
 
@@ -748,7 +748,7 @@ export interface VuiPaginationProps {
 	prevText?: string;
 	/** 下一页文本 */
 	nextText?: string;
-	/** */
+	/** 当前页高亮色，默认取主题主色 */
 	color?: string;
 }
 
@@ -846,7 +846,7 @@ export const VuiPromptCard: DefineComponent<VuiPromptCardProps>;
 export interface VuiRadioProps {
 	/** 是否选中，支持 v-model */
 	modelValue?: boolean;
-	/** 文本內容 */
+	/** 文本内容 */
 	label?: string;
 	/** 是否禁用 */
 	disabled?: boolean;
@@ -1086,15 +1086,17 @@ export interface VuiTagProps {
 	type?: string;
 	/** = [default|small|mini] 大小尺寸 */
 	size?: string;
+	/** 标签内容 */
+	text?: string;
 	/** = [true|false] 是否为禁用状态 */
 	disabled?: any;
 	/** = [true|false] 是否无需背景颜色（空心标签） */
 	inverted?: any;
 	/** = [true|false] 是否为圆角 */
 	circle?: any;
-	/** */
+	/** = [true|false] 是否为标记样式（左侧直角、右侧圆角） */
 	mark?: any;
-	/** */
+	/** 自定义样式，直接挂到根节点的 style 上 */
 	customStyle?: string;
 }
 
@@ -1230,7 +1232,7 @@ export interface VuiUploadProps {
 	size?: string;
 	/** 上传时的文件字段名 */
 	name?: string;
-	/** */
+	/** 上传请求头，透传给 uni.uploadFile 的 header */
 	header?: Record<string, any>;
 }
 

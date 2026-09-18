@@ -27,6 +27,7 @@
  * @property {String} width 容器宽度（CSS 值）
  * @property {String} height 容器高度（CSS 值）
  * @property {String} scrollViewHeight 内层 scroll-view 高度（CSS 值）
+ * @slot default {item} 每一项的内容
  */
 export default {
   name: 'VuiAutoScroll',

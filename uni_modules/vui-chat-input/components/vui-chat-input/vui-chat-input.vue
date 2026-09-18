@@ -41,8 +41,10 @@
 		</view>
 
 		<view class="vui-chat-input__action" :class="actionClass" @click="onAction">
+			<!-- 生成中：方块 + stopText 文案。stopText 传空串时只留方块（老样子） -->
 			<view v-if="loading" class="vui-chat-input__stop"></view>
-			<text v-else class="vui-chat-input__send-text">{{ sendText }}</text>
+			<text v-if="loading && stopText" class="vui-chat-input__stop-text">{{ stopText }}</text>
+			<text v-else-if="!loading" class="vui-chat-input__send-text">{{ sendText }}</text>
 		</view>
 	</view>
 </template>
@@ -305,6 +307,13 @@ $vui-code-color: #abb2bf !default;
 	}
 
 	&__send-text {
+		font-size: 28rpx;
+		color: $vui-text-color-inverse;
+	}
+
+	/* 停止按钮文案：与方块同排（__action 是 flex 居中），方块右侧留 8rpx */
+	&__stop-text {
+		margin-left: 8rpx;
 		font-size: 28rpx;
 		color: $vui-text-color-inverse;
 	}

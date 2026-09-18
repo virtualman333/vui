@@ -24,6 +24,8 @@
  * @property {Boolean} disabled = [true|false] 是否为禁用状态
  * @property {Boolean} inverted = [true|false] 是否无需背景颜色（空心标签）
  * @property {Boolean} circle = [true|false] 是否为圆角
+ * @property {Boolean} mark = [true|false] 是否为标记样式（左侧直角、右侧圆角）
+ * @property {String} customStyle 自定义样式，直接挂到根节点的 style 上
  * @event {Function} click 点击 Tag 触发事件
  */
 

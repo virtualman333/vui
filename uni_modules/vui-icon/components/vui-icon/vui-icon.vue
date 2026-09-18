@@ -14,6 +14,7 @@
  * @property {String} color 图标颜色
  * @property {Boolean} spin 是否旋转
  * @event {Function} click 点击图标触发
+ * @slot default 图标内容，覆盖 name / char 渲染出的字符
  */
 const GLYPHS = {
 	check: '✓',
