@@ -1,7 +1,7 @@
 {
   "id": "vui-backtop",
   "displayName": "vui-backtop",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "VUI 回到顶部组件",
   "keywords": [
     "vui-backtop"

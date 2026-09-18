@@ -1,7 +1,7 @@
 {
   "id": "vui-message",
   "displayName": "vui-message",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "VUI 消息提示组件",
   "keywords": [
     "vui-message"

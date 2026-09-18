@@ -1,7 +1,7 @@
 {
   "id": "vui-select",
   "displayName": "vui-select",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "VUI 下拉选择组件",
   "keywords": [
     "vui-select"

@@ -1,7 +1,7 @@
 {
   "id": "vui-scrollbar",
   "displayName": "vui-scrollbar",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "VUI 滚动条组件",
   "keywords": [
     "vui-scrollbar"

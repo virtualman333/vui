@@ -1,7 +1,7 @@
 {
   "id": "vui-count-to",
   "displayName": "vui-count-to",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "VUI 数字滚动组件",
   "keywords": [
     "vui-count-to"

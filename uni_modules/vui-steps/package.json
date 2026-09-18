@@ -1,7 +1,7 @@
 {
   "id": "vui-steps",
   "displayName": "vui-steps",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "VUI 步骤条组件",
   "keywords": [
     "vui-steps"
