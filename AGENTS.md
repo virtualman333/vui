@@ -95,13 +95,16 @@ easycom 同样找不到入口，组件等于不在包里。组件集合的唯一
   ```
 
   首个非 `@` 行会作为组件描述，`@property` / `@event` 会生成到 `types/index.d.ts` 与 `docs/API.md`。
+  ⚠ **组件描述之前的注释不得用 `/** */`**（模块级常量、辅助函数都一样），只能写 `/* */` 或 `//`。产物生成器与 `check:api` 取的都是**首块** `/** */`：在组件描述之前插一段 `/** */`，首块就变成那段辅助说明 —— 描述列印出辅助函数的第一行，全部 `@property` 对账一起错位（`check:rules` 的 `jsdoc-first` / `jsdoc-desc-is-first` 两向盯着）。组件描述**之后**的 `/** */` 不受影响 —— `vui-time-picker` 的辅助函数就正常用着 `/** */`。
 - **显式声明 `emits`**，避免自定义事件与原生事件双触发。
 - 组件内**不允许 import 其他 uni_modules 的组件**（npm 安装后路径不稳定），需要复用就写进组件自身。
 
-本节可自动判定的六条 —— 「不得 `<script setup>`」「v-model 必须 `modelValue`」「用了 `$emit` 必须声明 `emits`」
-「声明过的 `emits` 必须真的会被触发」「首块 JSDoc 必须存在」「不得 import 其它 uni_modules 组件」
-—— 由 `npm run check:rules` 执行（已并入 `check:all`）。后两条是**同一张表的两向**：
-`$emit` 的事件名与 `emits` 里的名字必须**逐个对齐**，少一个、多一个都红。
+本节可自动判定的七条 —— 「不得 `<script setup>`」「v-model 必须 `modelValue`」「用了 `$emit` 必须声明 `emits`」
+「声明过的 `emits` 必须真的会被触发」「首块 JSDoc 必须是组件描述」「辅助注释不得排在组件描述之前」
+「不得 import 其它 uni_modules 组件」
+—— 由 `npm run check:rules` 执行（已并入 `check:all`）。其中两组是**同一张表的两向**：
+① `$emit` 的事件名与 `emits` 里的名字必须**逐个对齐**，少一个、多一个都红；
+② 首块 JSDoc 既要是组件描述（含 `@description`），组件描述也得就是首块 —— 只判一面会留盲区。
 
 ---
 
@@ -202,11 +205,12 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 | `npm run check:gen` | 在临时副本里重新跑生成器，与已提交产物逐文件比对（白名单一致性见下一条） |
 | `npm run check:pack` | 取 `npm pack --dry-run --json` 的**真实**打包清单：必需文件是否都在、每个组件的四件套是否齐全（数量不写死在这里 —— 它随组件数变，扫描面对账见 `check:pack` 自身）、演示页/脚本/工程文件是否误入包、体积是否超标 |
 | `npm run check:theme` | 扫描全部组件的 `<style lang="scss">`：硬编码色值（第五节禁止）、缺主题兜底块、以及基线白名单是否失效 |
-| `npm run check:rules` | 执行第二节红线与第四节写法约定里可静态判定的几条：`v-html`、`<script setup>`、Vue2 的 `model:` 选项、跨 uni_modules import、缺首块 JSDoc、`.npmrc` 是否被 git 跟踪或被忽略，以及 **`$emit` 事件名与 `emits` 声明的两向对账**（触发了没声明 / 声明了从不触发，两向都红；script 与 template 里的 `$emit` 都算，数组与对象两种 `emits` 写法都认） |
+| `npm run check:rules` | 执行第二节红线与第四节写法约定里可静态判定的几条：`v-html`、`<script setup>`、Vue2 的 `model:` 选项、跨 uni_modules import、**首块 JSDoc 必须是组件描述**、`.npmrc` 是否被 git 跟踪或被忽略，以及 **`$emit` 事件名与 `emits` 声明的两向对账**（触发了没声明 / 声明了从不触发，两向都红；script 与 template 里的 `$emit` 都算，数组与对象两种 `emits` 写法都认）。首块 JSDoc 这条同样是**两向**：`jsdoc-first` 问「首块含不含 `@description`」，`jsdoc-desc-is-first` 问「含 `@description` 的那块是不是首块」 |
 | `npm run check:release` | `release.js` 第 0 步发布前置检查的自检：注入假环境跑一遍四类拦截（凭证不可用 / registry 已有该版本 / 本地 tag 已存在 / `.npmrc` 未被忽略），外加三条结构锁（`preflight` 必须在任何写入之前被调用、旧的「只看 `.npmrc` 文件是否存在」判据不得复活） |
 | `npm run check:template` | 仅模板作用域（`check` 里也调了一遍，这里留作单独排查与兜底） |
 | `npm run check:components` | 组件枚举与结构检查的自检：在仓库副本里注入「`.vue` 名字写错」「缺 `components/` 目录」两种坏结构，`prepublish-check` 必须拦下并点名；外加四条结构/行为锁（组件枚举只有一份、组件数 == `.vue` 数、**临时副本的删除只有 `rmTemp` 一条出口**、**清理函数对删不掉的目录不得抛错**） |
-| `npm run check:markdown` | vui-markdown 解析器的**行为测试**（唯一一条真的执行组件代码的检查）：用 `@vue/compiler-sfc` 取出 `<script>` 求值出组件选项，逐个断言表格识别 / 列数补齐 / 对齐标记 / `\|` 转义 / 普通文本不得被误判 / 围栏优先级，外加「模板里的表格必须在 `scroll-view scroll-x` 里」的结构锁 |
+| `npm run check:markdown` | vui-markdown 解析器的**行为测试**（真的执行组件代码的检查之一）：用 `@vue/compiler-sfc` 取出 `<script>` 求值出组件选项，逐个断言表格识别 / 列数补齐 / 对齐标记 / `\|` 转义 / 普通文本不得被误判 / 围栏优先级，外加「模板里的表格必须在 `scroll-view scroll-x` 里」的结构锁 |
+| `npm run check:logic` | **纯函数型组件的行为测试**（真的执行组件代码的检查之一，与 `check:markdown` 同一套求值方式）：slider（步长网格锚点必须是 `min` 而非 0、精度按 `step` 的小数位取、负区间、非法 `step`、`min===max`）、time-picker（四种 `showSeconds` / `min` / `max` 精度组合、输出精度恒等于组件精度、区间内原样通过）、pagination（页码上下界、0 条、`update()` 夹取、`pagerCount` 非法、字符串 `modelValue`、省略号）。断言条数有下限，且带「三个组件的被测入口都真的加载出来了」的自证 |
 | `npm run check:category` | `gen-docs.py` 的 `CATEGORY` 白名单不变量：每个组件**恰好登记一次**（同一分类内写两遍、或跨分类重复，一律失败）、与 `uni_modules/` 双向覆盖、id 命名规范、解析失败即失败；外加**「数量声称 vs 独立真值」对账**（README 里每处「N 个组件 / N 个 AI 组件」必须等于文件系统 / 白名单的真值，演示页 hero 文案那处手写的也一并钉住）。解析器在 `scripts/lib/category.js`（与 `check-gen` 共用同一份） |
 | `npm run check:api` | props / 插槽 两面契约的对账：`props-no-dead`（声明的 prop 全库必须有人读）、`props ↔ @property`、模板 `<slot> ↔ @slot` 三组都要两向，外加**产物 ↔ 源码**（`types/index.d.ts` 的 `<Pascal>Props` 字段、`docs/API.md` 的属性表与插槽表，与源码**逐位相等** —— 这一组是链上唯一拦得住「生成器静默丢 prop」的检查）。动态插槽名（`:name="column.key"`）静态抓不到，必须登记在脚本里的 `DYNAMIC_SLOTS`。解析器在 `scripts/lib/source.js`（与 `check-rules` 共用同一份，不再各留一个 `stripComments`） |
 
@@ -216,9 +220,11 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 - `check:category` 补的是**同一份文档里两句话互相矛盾**这类盲区。原来那条白名单检查写在 `check:gen` 里，用 `new Set` 去重，于是**丢掉了「登记了几次」**：实测把 `vui-button` 再加进「媒体组件」（它本来就在「基础组件」里），结果是 README 的 hero 行仍写「48 个开箱即用的组件」、而组件总览表里 `<vui-button>` 出现 **2 行**；docs/API.md 里出现 **2 个 `### vui-button` 小节与 2 条同名锚点**（第二个链接永远跳到第一个）；分类归属也随之二义。而 `check:gen` 照样打印「组件目录与生成器白名单双向一致（48 个组件）」并 exit 0。现在白名单的全部不变量归 `check:category` 一处（解析器与 `check-gen` 共用 `scripts/lib/category.js`，不再各解析一遍），并带两类反向自检（同一分类内重复 / 跨分类重复），证明「恰好登记一次」这条断言不是恒真的。
 - `check:pack` 补的是另一层盲区：上面所有检查查的都是**仓库里的文件**，而用户 `npm i` 拿到的是 **tarball**。`files` 字段少写一项（漏 `types/`）时产物全部合法、前面几条全绿，使用方的 TS 却直接找不到声明；`files` 被写成宽匹配时演示页与开发脚本一起进包。这一条是链上唯一盯着「用户真正装到手里的东西」的检查。
 - `check:theme` 盯的是**换肤能力**这条产品底线（第五节）：颜色一旦硬编码，组件就永久脱离主题层，换肤时它不变，而且**没有任何报错**。这条规则此前只写在文档里、没人执行 —— 一次手工「统一主题变量」之后，仍有 13 处硬编码散在 8 个组件里（其中 `#f2f3f5` 在 5 个组件里各复制了一遍，而主题层早就定义了同名变量）。该检查同时校验「每个组件都有主题兜底块」，漏跑 `inject-theme.py` 的新组件会被拦下。
-- `check:rules` 补齐的是**「写在文档里、没人执行」**那一类规则：第二节 6 条红线里此前只有 4 条有检查，第四节 5 条写法约定一条都没有。它们违反时的共同点是**不会有任何报错**：`v-html` 让组件在小程序端整块不渲染（那边只是空白）、Vue2 的 `model` 选项让 `v-model` 完全失效、缺 `emits` 让事件触发两次、`.npmrc` 进仓库等于把 npm token 明文公开。该脚本的所有文本判定都**先剥注释再扫**（`vui-markdown` 的 JSDoc 里写着「不使用 v-html」、`vui-form` 有一个名为 `model` 的 prop——直接 grep 会把这两个最守规矩的地方报成违规），并且输出「扫描面自证」两行（script / template 块各取到几个、多少组件用到 `$emit`、多少组件 JSDoc 齐备；以及**事件名级**的「声明 N 个 / 触发 M 个」，任一为 0 直接判失败），避免哪天解析失灵导致规则**在空集上全绿**。
+- `check:rules` 补齐的是**「写在文档里、没人执行」**那一类规则：第二节 6 条红线里此前只有 4 条有检查，第四节 5 条写法约定一条都没有。它们违反时的共同点是**不会有任何报错**：`v-html` 让组件在小程序端整块不渲染（那边只是空白）、Vue2 的 `model` 选项让 `v-model` 完全失效、缺 `emits` 让事件触发两次、`.npmrc` 进仓库等于把 npm token 明文公开。该脚本的所有文本判定都**先剥注释再扫**（`vui-markdown` 的 JSDoc 里写着「不使用 v-html」、`vui-form` 有一个名为 `model` 的 prop——直接 grep 会把这两个最守规矩的地方报成违规），并且输出「扫描面自证」两行（script / template 块各取到几个、多少组件用到 `$emit`、多少组件的**首块 JSDoc 是组件描述**；以及**事件名级**的「声明 N 个 / 触发 M 个」，任一为 0 直接判失败），避免哪天解析失灵导致规则**在空集上全绿**。
 
 `check:rules` 里 `declare-emits` 这一条曾经是**形状匹配**：只要组件里出现过 `emits:` 这个键就放行。实测它放过了一处真缺陷 —— `vui-region-picker` 写着 `emits: ['change']` 却 `this.$emit('columnchange')`；反过来 `vui-input` 声明了 `blur` / `change` 却从不触发（文档 `@event` 承诺了、宿主的 `@blur` 永远不响）。**「写了 emits」与「每个事件名都对齐」是两件事**，前者查不出来后者。现在这两向各有一条规则，判据是**事件名的集合相等**，不是「有没有那个键」。
+
+`jsdoc-first` 是同一种病：它此前只判「`export default` 之前有没有 `/**`」—— 而辅助函数的注释同样满足这个形状，所以它**一次都没响过**。实测把一段模块级辅助函数的 `/** */` 排在组件描述之前（`vui-slider` 的 `decimalsOf`），产物侧 `firstJsDoc` 取到的首块就变成了那段辅助说明：`README.md` 与 `docs/API.md` 的描述列印出「step 的小数位数 —— …」，同时 8 个 prop 全部报「JSDoc 里没有对应的 `@property`」。第四节第 1 条本来就写着「首块 JSDoc 必须存在**且是 `<script>` 中第一个 `/** */` 块**」—— 文档没错，是检查只做了前半句。现在同样拆成两向（`jsdoc-first` / `jsdoc-desc-is-first`），并把扫描面里「首块 JSDoc 是组件描述」的计数一起打出来。**写下来没人执行的规则会烂，写下来执行不动的规则更坏** —— 它会让后来的人以为有人守着。
 
 `check:all` 全部是静态校验，**不依赖 HBuilderX**。本机已装 HBuilderX（`D:\Program Files\HBuilderX`，可直接复用它自带的 node + vite 构建 H5 产物做浏览器实跑），但校验链必须能在没装的机器上跑，所以不把它接进 `check:all`；由于至今**没有任何一轮做过 H5 / 真机实跑**，改组件后仍必须在提交信息里说明未做实跑验证。
 
@@ -226,6 +232,8 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 
 `check:components` 补的是**枚举自身**的盲区：`check:all` 里其余脚本都要先回答「有哪些组件」，而这个答案此前在 6 个脚本里各算了一遍、语义有三种（只看目录名 / 目录名 + 同名 `.vue` / 所有 `.vue` 文件）。其中「目录名 + 同名 `.vue`」那种写法（`prepublish-check` 与 `check-sfc` 都用过）**会把结构坏掉的组件从集合里静默丢弃**：实测在副本里放一个 `components/vui-probe/index.vue`（名字写错），`prepublish-check` 照样打印「校验通过，可以发布」，而它自己下一行还打印着「模板已查: 49 个组件」——两个数字互相矛盾却没人管；后果就是第三节那条红灯变成绿灯。现在枚举收敛到 `scripts/lib/components.js`（`listComponents()` 永不静默丢弃），`check:components` 用子进程真跑一遍来证明它确实还拦得住，并锁死「枚举只有一份」。
 - `check:markdown` 补的是**另一类盲区：没人跑过组件的代码**。上面所有检查看的都是「文件长什么样」——语法、主题变量、产物一致性、tarball 清单、组件枚举——它们可以全绿，而组件渲染出来的东西是错的。vui-markdown 的解析器是纯函数（不碰 DOM、不碰 `uni`、不需要渲染），恰恰最好测，却从建立起一次都没被执行过：它把 Markdown 表格整段吞成普通段落，用户看到的是满屏 `| 模型 | 分数 |` 原文，而十道检查全部通过。表格是模型输出里最常见的一种结构。该脚本用 `@vue/compiler-sfc` 取 `<script>` 块求值出组件选项（不手写正则切字符串——正文里出现 `</script>` 之类就会骗过手写解析器），再组装最小 `this` 直接调 `computed.blocks`；并对「表格必须渲染在 `scroll-view scroll-x` 里」上结构锁——窄屏上宽表撑破整页是移动端最难查的一类故障。同一类缺口后来又在**行内链接 / 图片**上出现了一次（`[文本](地址)` 也被原样吐给用户，链接是模型输出里仅次于表格的常见结构），所以该脚本现在同时覆盖这两组，并带一条**计数不变量**：模板里渲染片段的位置数与挂点击入口的位置数必须相等（只断言「出现过点击入口」是不够的——挂一处也算出现过）。
+
+`check:logic` 补的是上一条**没覆盖到的那部分**同一类盲区：`check:markdown` 证明「检查链可以全绿而组件渲染结果是错的」，但它只测 vui-markdown 一个组件。库里另外几个**纯函数型**组件（算网格 / 算边界 / 算页码，不碰 DOM）同样最好测，却从建立起一次都没被执行过 —— 而它们算错时的共同点是**不影响语法、不影响产物生成、不影响文档登记**，只影响用户拿到手的那个数字。实测抓出三处：① `vui-slider` 的步长网格**锚在 0 而不是 `min`** —— `min=10 / max=20 / step=3` 的合法刻度是 10/13/16/19，旧实现算出 12（既不在用户设的刻度上，又让最左边的 `min` 永远选不中：拖到 0% 得 12、拖到 100% 得 18）；精度还写死 2 位，`step=0.001` 时 0.123 被抹成 0.12；② `vui-time-picker` 把 `min` / `max` **直接比字符串**，而边界允许写 `HH:mm` 或 `HH:mm:ss`、组件精度由 `showSeconds` 决定 —— `max="14:30:00"` 会让一个不显示秒的组件吐出带秒的值；③ `vui-pagination` 的 `current` **只收下界**，条数变少后 `pages` 里没有任何一页等于它 → **一页都不高亮**，而 `onPrev()` 还会从越界值减 1，一次点击直接跳到最后一页。这个脚本还踩了两个「探针自己撒谎」的坑，两条都写进了注释：`sliderAt` 必须默认 `modelValue: null`（组件里有 `if (value === this.modelValue) return`，默认 0 时拖到 0 一次都不 emit，断言拿到的是上一次的事件）、pagination 那条必须**单开实例**（`update()` 有 `if (target === this.current) return`，复用一个 vm 时第二次调用被挡住）。凡「读一个外部状态来断言」的测试都有这个风险，所以 `ok(payload !== undefined, '拿不到判据')` 这类自证与「断言条数下限」一起留在脚本里。
 
 ---
 

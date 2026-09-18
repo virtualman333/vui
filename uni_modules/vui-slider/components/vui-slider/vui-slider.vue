@@ -21,6 +21,26 @@ const VUI_COLOR = {
 	primary: '#2979ff',
 	placeholder: '#c0c4cc',
 };
+
+/*
+ * step 的小数位数 —— 用来把浮点误差收掉（`0.1` 的步长不该产出 `0.30000000000000004`）。
+ * 不能写死 2 位：`step=0.001` 时写死 2 位会把刻度直接抹平。
+ */
+function decimalsOf(step) {
+	const s = String(step);
+	if (/e-/i.test(s)) {
+		const n = Number(s);
+		return Math.min(10, Math.max(0, Math.ceil(-Math.log10(n))));
+	}
+	const dot = s.indexOf('.');
+	return dot < 0 ? 0 : Math.min(10, s.length - dot - 1);
+}
+
+function roundTo(value, digits) {
+	const factor = Math.pow(10, digits);
+	return Math.round(value * factor) / factor;
+}
+
 /**
  * Slider 滑块
  * @description 通过拖动滑块在一个固定区间内进行选择
@@ -127,10 +147,14 @@ export default {
 			let ratio = (clientX - this.rect.left) / this.rect.width;
 			if (ratio < 0) ratio = 0;
 			if (ratio > 1) ratio = 1;
-			let value = min + ratio * (max - min);
 			const step = Number(this.step) || 1;
-			value = Math.round(value / step) * step;
-			value = Math.round(value * 100) / 100;
+			// 步长网格的锚点是 **min**，不是 0：`min=10 / max=20 / step=3` 的合法值是
+			// 10、13、16、19，按 0 对齐会算出 12（既不在网格上，也把 min 这个端点弄丢了 ——
+			// 用户把滑块拖到最左边拿不到 min，拖出来的每一个值都不是自己设的刻度）。
+			const offset = ratio * (max - min);
+			let value = min + Math.round(offset / step) * step;
+			// 精度按 step 的小数位取，不写死 2 位（`step=0.001` 时写死 2 位等于把刻度抹平）。
+			value = roundTo(value, decimalsOf(step));
 			if (value < min) value = min;
 			if (value > max) value = max;
 			if (value === this.modelValue) return;

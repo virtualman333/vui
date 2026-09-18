@@ -21,7 +21,7 @@
  *   §4   Vue3 选项式 API（不得用 <script setup> —— 产物生成依赖显式 props）
  *   §4   v-model 一律 modelValue（不得用 Vue2 的 model:{prop,event}）
  *   §4   显式声明 emits（否则自定义事件与原生事件双触发）
- *   §4   首块 JSDoc 必须存在（产物里的描述、@property、@event 都由它生成）
+ *   §4   首块 JSDoc 必须存在，**且必须就是组件描述**（产物里的描述、@property、@event 都由它生成）
  *   §4   组件内不得 import 其他 uni_modules 的组件（npm 安装后路径不稳定）
  *
  * 这些规则的共同点是：**违反了不会有任何报错**，只会在用户那里现形 ——
@@ -52,7 +52,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { listComponents } = require('./lib/components');
-const { scriptBlock, stripComments, templateBlock } = require('./lib/source');
+const { firstJsDoc, scriptBlock, stripComments, templateBlock } = require('./lib/source');
 
 const root = path.resolve(__dirname, '..');
 const MODULES = path.join(root, 'uni_modules');
@@ -239,16 +239,78 @@ const RULES = [
   {
     id: 'jsdoc-first',
     rule: '§4',
-    name: '<script> 里必须有首块 JSDoc（描述 / @property / @event 的来源）',
-    why: '产物里的组件描述、props 说明、事件说明全部由它生成，缺了会静默生成空描述',
-    fix: '在 export default 之前补 /** ... @description ... @property {Type} p 说明 */',
+    name: '<script> 的首块 JSDoc 必须是组件描述（按 AGENTS.md 第四节：存在，且就是第一个 /** */ 块，含 @description）',
+    why:
+      '产物里的组件描述（README 与 API.md 那一列）、props 说明、事件说明全部由**首块** JSDoc 生成 —— ' +
+      'gen-docs.py / gen-package.py 与 lib/source.js 的 firstJsDoc 都是取首块。' +
+      '在组件描述之前给模块级常量或辅助函数写 /** */，首块就变成了那段辅助说明：' +
+      '组件描述被挤到第二块，于是 README/API.md 的描述列印出辅助函数的第一行，' +
+      '同时每个 prop 都报「JSDoc 里没有对应的 @property」（check:api 一起红）。' +
+      '它不影响语法、不影响 props 解析，只在文档里现形。' +
+      '⚠ 旧版这条只判「export default 之前有没有 /**」—— 辅助函数的注释同样满足，' +
+      '所以真出事时它一次都没响过，是「不会响的检查」。',
+    fix: '把排在组件描述**之前**的那块 `/** */` 改成 `/* */` 或 `//`（组件描述之后的 `/** */` 不受影响）；组件描述 JSDoc 留作 <script> 里第一个 `/** */`',
     run: ({ script, raw }) => {
       if (!script) return [];
-      const at = script.indexOf('export default');
-      if (at === -1) return [];
-      if (script.slice(0, at).includes('/**')) return [];
-      const abs = raw.indexOf('export default');
-      return [{ idx: at, line: abs === -1 ? 1 : lineOf(raw, abs), evidence: 'export default 之前没有 /** 块' }];
+      /* 定位 <script> 块在原文里的起点，好把「块内偏移」换算成真实的文件行号 */
+      const sm = /<script[^>]*>/.exec(raw);
+      const base = sm ? sm.index + sm[0].length : 0;
+      const jsdocAt = script.indexOf('/**');
+      if (jsdocAt === -1) {
+        const at = script.indexOf('export default');
+        return [
+          {
+            idx: at === -1 ? 0 : at,
+            line: lineOf(raw, base + (at === -1 ? 0 : at)),
+            evidence: '<script> 里一块 /** */ 都没有 —— 描述 / @property / @event 无处可生成',
+          },
+        ];
+      }
+      const body = firstJsDoc(script);
+      if (/@description/.test(body)) return [];
+      const head = (body.split('\n').find((l) => l.trim().replace(/^\*+/, '').trim()) || '')
+        .trim()
+        .replace(/^\*+\s*/, '');
+      return [
+        {
+          idx: jsdocAt,
+          line: lineOf(raw, base + jsdocAt),
+          evidence:
+            `首块 JSDoc 不是组件描述（没有 @description），首行是「${head.slice(0, 60)}」—— ` +
+            '它会被当成组件描述写进 README/API.md，真正的描述被挤到第二块、props 对账随之全失配',
+        },
+      ];
+    },
+  },
+  {
+    id: 'jsdoc-desc-is-first',
+    rule: '§4',
+    name: '反向对账：组件描述 JSDoc 必须在**第一个** /** */ 块，前面不许再插别的 JSDoc 块',
+    why:
+      '这是上一条的另一面：上一条问「首块是不是描述」，这一条问「描述是不是首块」—— ' +
+      '两者看似等价，但把断言只写成其中一面时，另一面就成了盲区（描述存在、也含 @description，' +
+      '却排在第二个 /** */ 块，上一条照样判绿）。既然判据来自源码版式，就两面都钉住：' +
+      '取「含 @description 的那一块」的位置，它必须与 `/**` 的首次出现位置相同。',
+    fix: '把排在组件描述之前的 /** */ 块改成 /* */ 或 //（辅助函数、模块级常量都算）',
+    run: ({ script }) => {
+      if (!script) return [];
+      const all = [...script.matchAll(/\/\*\*([\s\S]*?)\*\//g)];
+      if (!all.length) return [];
+      const descIdx = all.findIndex((m) => /@description/.test(m[1]));
+      if (descIdx <= 0) return []; // 没有描述块由 check:api 与上一条负责；0 就是首块
+      const first = all[0][1];
+      const head = (first.split('\n').find((l) => l.trim().replace(/^\*+/, '').trim()) || '')
+        .trim()
+        .replace(/^\*\s*/, '');
+      return [
+        {
+          idx: all[0].index,
+          line: 1,
+          evidence:
+            `组件描述是第 ${descIdx + 1} 个 /** */ 块，它前面还有 ${descIdx} 块 JSDoc；` +
+            `第 1 块的首行是「${head.slice(0, 60)}」—— 产物取的是首块，描述会因此错位`,
+        },
+      ];
     },
   },
 ];
@@ -320,8 +382,9 @@ for (const e of entries) {
       if (decl) coverage.emitsDeclared++;
       coverage.emitNamesFired += fired.size;
       coverage.emitNamesDeclared += decl ? decl.size : 0;
-      const at = script.indexOf('export default');
-      if (at > -1 && script.slice(0, at).includes('/**')) coverage.jsdocOk++;
+      /* 判据与 jsdoc-first 规则同源（都走 firstJsDoc）：改这里等于同时改那条规则。
+         旧版算的是「export default 之前有没有 /**」—— 与规则同样的弱判据，所以两者一起瞎。 */
+      if (/@description/.test(firstJsDoc(script))) coverage.jsdocOk++;
     }
     for (const r of RULES) {
       for (const v of r.run({ raw, script, tpl }) || []) {
@@ -347,7 +410,7 @@ console.log(
   `  扫描面: script 块 ${scanned - coverage.noScript.length}/${scanned}   ` +
     `template 块 ${scanned - coverage.noTemplate.length}/${scanned}   ` +
     `用到 $emit 的组件 ${coverage.emitUsers}（其中已声明 emits ${coverage.emitsDeclared}）   ` +
-    `首块 JSDoc 齐备 ${coverage.jsdocOk}/${scanned}`
+    `首块 JSDoc 是组件描述 ${coverage.jsdocOk}/${scanned}`
 );
 console.log(
   `  事件名对账: 声明 ${coverage.emitNamesDeclared} 个 / 实际触发 ${coverage.emitNamesFired} 个` +

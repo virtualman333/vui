@@ -80,6 +80,7 @@
     "check:category": "node scripts/check-category.js",
     "check:markdown": "node scripts/check-markdown.js",
     "check:api": "node scripts/check-api.js",
+    "check:logic": "node scripts/check-logic.js",
     "theme:inject": "python scripts/inject-theme.py",
     "gen": "python scripts/gen-package.py && python scripts/gen-docs.py",
     "prepublishOnly": "npm run check:all",

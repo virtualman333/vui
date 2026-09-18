@@ -53,6 +53,46 @@ function range(end) {
 	return list;
 }
 
+/** 把「不含秒」的时刻进一分钟（`09:59` → `10:00`）；已经是 `23:59` 就停在原地 */
+function nextMinute(hh, mm) {
+	let h = Number(hh);
+	let m = Number(mm) + 1;
+	if (m > 59) {
+		m = 0;
+		h += 1;
+	}
+	// 进到 24:00 会绕回 00:00 —— 那比 min 还早。宁可停在当天最大的「不含秒」时刻，
+	// 「不越界」比「进位」重要。
+	if (h > 23) return '23:59';
+	return pad(h) + ':' + pad(m);
+}
+
+/**
+ * 把 `min` / `max` 收成**组件自己的精度**。
+ *
+ * 为什么必须收：组件的精度由 `showSeconds` 决定，而边界允许写成 `HH:mm` 或 `HH:mm:ss`
+ * （见 JSDoc 的 `@property min 可选最小时间 HH:mm(:ss)`）。两边精度不同时直接比字符串是错的：
+ *
+ *   - `showSeconds=false`（候选值 `14:31`）与 `max="14:30:00"` → `"14:31" > "14:30:00"` 成立，
+ *     clamp 出来的值带上了秒 —— 父组件收到的字符串形式与组件展示的不一致；
+ *   - 反过来 `min="09:00:30"` 时，`"08:00" < "09:00:30"` 也成立，但 clamp 回 `min` 原样
+ *     同样会把秒带进一个不显示秒的组件。
+ *
+ * `mode='floor'` 用于上界（向下取整，绝不越过 max）；`mode='ceil'` 用于下界（向上进位，
+ * 绝不早于 min）。两个方向都保证「收完之后仍然不越界」。
+ */
+function trimTo(text, withSeconds, mode) {
+	if (!text) return '';
+	const parts = String(text).split(':');
+	const hh = pad(toNumber(parts[0]));
+	const mm = pad(toNumber(parts[1]));
+	if (withSeconds) return hh + ':' + mm + ':' + pad(toNumber(parts[2]));
+	// 不显示秒：秒位非 0 时按方向处理
+	const ss = toNumber(parts[2]);
+	if (ss > 0) return mode === 'ceil' ? nextMinute(hh, mm) : hh + ':' + mm;
+	return hh + ':' + mm;
+}
+
 export default {
 	name: 'VuiTimePicker',
 	emits: ['update:modelValue', 'change'],
@@ -138,9 +178,13 @@ export default {
 			this.hourIndex = value[0] || 0;
 			this.minuteIndex = value[1] || 0;
 			if (this.showSeconds) this.secondIndex = value[2] || 0;
+			// 边界先收成组件自己的精度再比，且 clamp 出来的值也必须是这个精度 ——
+			// 否则 `max="14:30:00"` 会把一个不显示秒的组件变成「输出带秒」的实现。
 			let next = this.currentText;
-			if (this.min && next < this.min) next = this.min;
-			if (this.max && next > this.max) next = this.max;
+			const lo = trimTo(this.min, this.showSeconds, 'ceil');
+			const hi = trimTo(this.max, this.showSeconds, 'floor');
+			if (lo && next < lo) next = lo;
+			if (hi && next > hi) next = hi;
 			this.syncByValue(next);
 			this.$emit('update:modelValue', next);
 			this.$emit('change', next);

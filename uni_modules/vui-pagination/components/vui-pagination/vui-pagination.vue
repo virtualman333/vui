@@ -81,7 +81,12 @@ export default {
 	computed: {
 		current() {
 			const val = Number(this.modelValue) || 1;
-			return val < 1 ? 1 : val;
+			if (val < 1) return 1;
+			// 上限也要一起收：条数变少之后（筛选 / 删除一行）父组件手里的页码可能比总页数大，
+			// 而 `pages` 里的页号最大只到 pageCount —— 两边对不上时**没有任何一页被高亮**，
+			// 用户看到的是「一页都没选中」；点「上一页」还会从那个越界值减 1，
+			// 一次点击直接跳到最后一页。收窄只影响展示与高亮，emit 的值仍由 update() 决定。
+			return Math.min(val, this.pageCount);
 		},
 		pageCount() {
 			const size = Number(this.pageSize) || 10;
