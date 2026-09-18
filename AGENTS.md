@@ -98,8 +98,10 @@ easycom 同样找不到入口，组件等于不在包里。组件集合的唯一
 - **显式声明 `emits`**，避免自定义事件与原生事件双触发。
 - 组件内**不允许 import 其他 uni_modules 的组件**（npm 安装后路径不稳定），需要复用就写进组件自身。
 
-本节可自动判定的五条 —— 「不得 `<script setup>`」「v-model 必须 `modelValue`」「用了 `$emit` 必须声明 `emits`」
-「首块 JSDoc 必须存在」「不得 import 其它 uni_modules 组件」—— 由 `npm run check:rules` 执行（已并入 `check:all`）。
+本节可自动判定的六条 —— 「不得 `<script setup>`」「v-model 必须 `modelValue`」「用了 `$emit` 必须声明 `emits`」
+「声明过的 `emits` 必须真的会被触发」「首块 JSDoc 必须存在」「不得 import 其它 uni_modules 组件」
+—— 由 `npm run check:rules` 执行（已并入 `check:all`）。后两条是**同一张表的两向**：
+`$emit` 的事件名与 `emits` 里的名字必须**逐个对齐**，少一个、多一个都红。
 
 ---
 
@@ -200,10 +202,10 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 | `npm run check:gen` | 在临时副本里重新跑生成器，与已提交产物逐文件比对（白名单一致性见下一条） |
 | `npm run check:pack` | 取 `npm pack --dry-run --json` 的**真实**打包清单：必需文件是否都在、每个组件的四件套是否齐全（数量不写死在这里 —— 它随组件数变，扫描面对账见 `check:pack` 自身）、演示页/脚本/工程文件是否误入包、体积是否超标 |
 | `npm run check:theme` | 扫描全部组件的 `<style lang="scss">`：硬编码色值（第五节禁止）、缺主题兜底块、以及基线白名单是否失效 |
-| `npm run check:rules` | 执行第二节红线与第四节写法约定里可静态判定的几条：`v-html`、`<script setup>`、Vue2 的 `model:` 选项、跨 uni_modules import、用了 `$emit` 却没声明 `emits`、缺首块 JSDoc、`.npmrc` 是否被 git 跟踪或被忽略 |
+| `npm run check:rules` | 执行第二节红线与第四节写法约定里可静态判定的几条：`v-html`、`<script setup>`、Vue2 的 `model:` 选项、跨 uni_modules import、缺首块 JSDoc、`.npmrc` 是否被 git 跟踪或被忽略，以及 **`$emit` 事件名与 `emits` 声明的两向对账**（触发了没声明 / 声明了从不触发，两向都红；script 与 template 里的 `$emit` 都算，数组与对象两种 `emits` 写法都认） |
 | `npm run check:release` | `release.js` 第 0 步发布前置检查的自检：注入假环境跑一遍四类拦截（凭证不可用 / registry 已有该版本 / 本地 tag 已存在 / `.npmrc` 未被忽略），外加三条结构锁（`preflight` 必须在任何写入之前被调用、旧的「只看 `.npmrc` 文件是否存在」判据不得复活） |
 | `npm run check:template` | 仅模板作用域（`check` 里也调了一遍，这里留作单独排查与兜底） |
-| `npm run check:components` | 组件枚举与结构检查的自检：在仓库副本里注入「`.vue` 名字写错」「缺 `components/` 目录」两种坏结构，`prepublish-check` 必须拦下并点名；外加两条结构锁（组件枚举只有一份、组件数 == `.vue` 数） |
+| `npm run check:components` | 组件枚举与结构检查的自检：在仓库副本里注入「`.vue` 名字写错」「缺 `components/` 目录」两种坏结构，`prepublish-check` 必须拦下并点名；外加四条结构/行为锁（组件枚举只有一份、组件数 == `.vue` 数、**临时副本的删除只有 `rmTemp` 一条出口**、**清理函数对删不掉的目录不得抛错**） |
 | `npm run check:markdown` | vui-markdown 解析器的**行为测试**（唯一一条真的执行组件代码的检查）：用 `@vue/compiler-sfc` 取出 `<script>` 求值出组件选项，逐个断言表格识别 / 列数补齐 / 对齐标记 / `\|` 转义 / 普通文本不得被误判 / 围栏优先级，外加「模板里的表格必须在 `scroll-view scroll-x` 里」的结构锁 |
 | `npm run check:category` | `gen-docs.py` 的 `CATEGORY` 白名单不变量：每个组件**恰好登记一次**（同一分类内写两遍、或跨分类重复，一律失败）、与 `uni_modules/` 双向覆盖、id 命名规范、解析失败即失败；外加**「数量声称 vs 独立真值」对账**（README 里每处「N 个组件 / N 个 AI 组件」必须等于文件系统 / 白名单的真值，演示页 hero 文案那处手写的也一并钉住）。解析器在 `scripts/lib/category.js`（与 `check-gen` 共用同一份） |
 
@@ -212,7 +214,9 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 - `check:category` 补的是**同一份文档里两句话互相矛盾**这类盲区。原来那条白名单检查写在 `check:gen` 里，用 `new Set` 去重，于是**丢掉了「登记了几次」**：实测把 `vui-button` 再加进「媒体组件」（它本来就在「基础组件」里），结果是 README 的 hero 行仍写「48 个开箱即用的组件」、而组件总览表里 `<vui-button>` 出现 **2 行**；docs/API.md 里出现 **2 个 `### vui-button` 小节与 2 条同名锚点**（第二个链接永远跳到第一个）；分类归属也随之二义。而 `check:gen` 照样打印「组件目录与生成器白名单双向一致（48 个组件）」并 exit 0。现在白名单的全部不变量归 `check:category` 一处（解析器与 `check-gen` 共用 `scripts/lib/category.js`，不再各解析一遍），并带两类反向自检（同一分类内重复 / 跨分类重复），证明「恰好登记一次」这条断言不是恒真的。
 - `check:pack` 补的是另一层盲区：上面所有检查查的都是**仓库里的文件**，而用户 `npm i` 拿到的是 **tarball**。`files` 字段少写一项（漏 `types/`）时产物全部合法、前面几条全绿，使用方的 TS 却直接找不到声明；`files` 被写成宽匹配时演示页与开发脚本一起进包。这一条是链上唯一盯着「用户真正装到手里的东西」的检查。
 - `check:theme` 盯的是**换肤能力**这条产品底线（第五节）：颜色一旦硬编码，组件就永久脱离主题层，换肤时它不变，而且**没有任何报错**。这条规则此前只写在文档里、没人执行 —— 一次手工「统一主题变量」之后，仍有 13 处硬编码散在 8 个组件里（其中 `#f2f3f5` 在 5 个组件里各复制了一遍，而主题层早就定义了同名变量）。该检查同时校验「每个组件都有主题兜底块」，漏跑 `inject-theme.py` 的新组件会被拦下。
-- `check:rules` 补齐的是**「写在文档里、没人执行」**那一类规则：第二节 6 条红线里此前只有 4 条有检查，第四节 5 条写法约定一条都没有。它们违反时的共同点是**不会有任何报错**：`v-html` 让组件在小程序端整块不渲染（那边只是空白）、Vue2 的 `model` 选项让 `v-model` 完全失效、缺 `emits` 让事件触发两次、`.npmrc` 进仓库等于把 npm token 明文公开。该脚本的所有文本判定都**先剥注释再扫**（`vui-markdown` 的 JSDoc 里写着「不使用 v-html」、`vui-form` 有一个名为 `model` 的 prop——直接 grep 会把这两个最守规矩的地方报成违规），并且输出「扫描面自证」一行（script / template 块各取到几个、多少组件用到 `$emit`、多少组件 JSDoc 齐备），避免哪天解析失灵导致规则**在空集上全绿**。
+- `check:rules` 补齐的是**「写在文档里、没人执行」**那一类规则：第二节 6 条红线里此前只有 4 条有检查，第四节 5 条写法约定一条都没有。它们违反时的共同点是**不会有任何报错**：`v-html` 让组件在小程序端整块不渲染（那边只是空白）、Vue2 的 `model` 选项让 `v-model` 完全失效、缺 `emits` 让事件触发两次、`.npmrc` 进仓库等于把 npm token 明文公开。该脚本的所有文本判定都**先剥注释再扫**（`vui-markdown` 的 JSDoc 里写着「不使用 v-html」、`vui-form` 有一个名为 `model` 的 prop——直接 grep 会把这两个最守规矩的地方报成违规），并且输出「扫描面自证」两行（script / template 块各取到几个、多少组件用到 `$emit`、多少组件 JSDoc 齐备；以及**事件名级**的「声明 N 个 / 触发 M 个」，任一为 0 直接判失败），避免哪天解析失灵导致规则**在空集上全绿**。
+
+`check:rules` 里 `declare-emits` 这一条曾经是**形状匹配**：只要组件里出现过 `emits:` 这个键就放行。实测它放过了一处真缺陷 —— `vui-region-picker` 写着 `emits: ['change']` 却 `this.$emit('columnchange')`；反过来 `vui-input` 声明了 `blur` / `change` 却从不触发（文档 `@event` 承诺了、宿主的 `@blur` 永远不响）。**「写了 emits」与「每个事件名都对齐」是两件事**，前者查不出来后者。现在这两向各有一条规则，判据是**事件名的集合相等**，不是「有没有那个键」。
 
 `check:all` 全部是静态校验，**不依赖 HBuilderX**。本机已装 HBuilderX（`D:\Program Files\HBuilderX`，可直接复用它自带的 node + vite 构建 H5 产物做浏览器实跑），但校验链必须能在没装的机器上跑，所以不把它接进 `check:all`；由于至今**没有任何一轮做过 H5 / 真机实跑**，改组件后仍必须在提交信息里说明未做实跑验证。
 
@@ -228,6 +232,8 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 大改造过程中**每完成一个阶段就 commit + push**。
 
 真实事故：一次会话中工作目录被意外清空（只剩 1 个文件，连 `.git` 都没了），全部未提交改动丢失，
+**假红也是缺陷，而且比漏检更贵。** `check:components` 曾在 Windows 上偶发假红：临时副本删不掉时 `fs.rmSync` 抛 `EBUSY`，而那一下正好在 `finally` 里，被外层 catch 收成「自检执行失败」→ 整条 `check:all` 判红，报的还是一件跟组件结构毫无关系的事（同一份代码连跑三次：一次红两次绿）。现在删副本走 `rmTemp()`：退避重试几次，仍删不掉就**只打印警告并留着**（系统临时目录里的残留副本不是包里的缺陷），并配两条锁防止有人再写回裸删。**检查一旦会偶发假红，人就会开始绕过它，它守的东西也就全没了 —— 修假红和修漏检同样重要。**
+
 只能从远端 clone 后重跑脚本重建。**把远端当作唯一可靠的备份点**，并把生成脚本纳入仓库
 （`scripts/`），它们是灾难恢复时的重建依据。
 

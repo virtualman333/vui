@@ -21,10 +21,12 @@
 	 * @tutorial https://github.com/virtualman333/vui
 	 * @property {Number} level = [1：省|2：省市|3：省市区|4：省市区镇] 
 	 * @property {Array} value = [默认值] 
+	 * @event {Function} change 选完一列并确认时触发，参数为 picker 的 change 事件对象
+	 * @event {Function} columnchange 滚动某一列时触发（无参数）—— 用于联动刷新下一列的可选项
 	 */
 	export default {
 		name: 'vuiRegionPicker',
-		emits: ['change'],
+		emits: ['change', 'columnchange'],
 		props: {
 			value: {
 				type: Array,

@@ -132,6 +132,51 @@ function templateBlock(raw) {
 /** 行号：在原文里找第 n 次出现的位置 */
 const lineOf = (text, idx) => text.slice(0, idx).split('\n').length;
 
+/**
+ * 从 `<script>` 里取 `emits` 声明的**事件名集合**；整份 script 没写 `emits:` 时返回 null。
+ *
+ * 支持数组与对象两种写法（`emits: ['change']` / `emits: { change: null }`），数组跨行也认。
+ *
+ * 为什么不能用「有没有 `emits:` 这个键」当判据：那是**形状匹配**，而不是对账。
+ * 实测过一处：组件写着 `emits: ['change']`，却 `this.$emit('columnchange')` ——
+ * 形状匹配照样放行，而 AGENTS.md §四 明写「用了 `$emit` 必须声明 `emits`」。
+ */
+function declaredEmits(s) {
+  const m = /\bemits\s*:\s*(\[[\s\S]*?\]|\{[\s\S]*?\})/.exec(s);
+  if (!m) return null;
+  const body = m[1];
+  const out = new Set();
+  for (const x of body.matchAll(/['"]([^'"]+)['"]/g)) out.add(x[1]);
+  // 对象写法的事件名是**键**（值可以是 null 或校验函数），键可以不加引号
+  if (body.trim().startsWith('{')) {
+    for (const x of body.matchAll(/(?:^|[,{\s])([A-Za-z_$][\w$]*)\s*:/g)) out.add(x[1]);
+  }
+  return out;
+}
+
+/** 真正被 `$emit('x')` 触发过的事件名（script 与 template 都算）；值给出来源块 */
+function firedEmits(s, t) {
+  const out = new Map();
+  const scan = (text, where) => {
+    if (!text) return;
+    for (const m of text.matchAll(/\$emit\(\s*['"]([^'"]+)['"]/g)) {
+      if (!out.has(m[1])) out.set(m[1], where);
+    }
+  };
+  scan(s, 'script');
+  scan(t, 'template');
+  return out;
+}
+
+/** 转义成正则字面量 */
+const reEsc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** 事件名在原文里的行号；找不到就给 1（不编造） */
+function eventLine(raw, name) {
+  const m = new RegExp("\\$emit\\(\\s*['\"]" + reEsc(name) + "['\"]").exec(raw);
+  return m ? lineOf(raw, m.index) : 1;
+}
+
 /** 规则定义：id → { name, scope, desc, fix, run(ctx) } */
 const RULES = [
   {
@@ -203,16 +248,52 @@ const RULES = [
   {
     id: 'declare-emits',
     rule: '§4',
-    name: '使用了 $emit 就必须显式声明 emits',
-    why: '不声明时自定义事件与同名原生事件会双触发（父级 handler 被调用两次）',
-    fix: "在 export default 里加 emits: ['update:modelValue', 'change', ...]",
-    run: ({ script }) => {
+    name: '使用了 $emit 就必须显式声明 emits —— **逐个事件名对账**，不是「有没有 emits: 这个键」',
+    why: '不声明时自定义事件与同名原生事件会双触发（父级 handler 被调用两次）；而「写了 emits 但漏了某一个名字」同样是漏，形状匹配查不出来',
+    fix: "把每个 $emit('x') 的 x 都写进 emits: ['update:modelValue', 'change', ...]",
+    run: ({ script, tpl, raw }) => {
       if (!script) return [];
       const s = stripComments(script);
-      if (!/this\s*\.\s*\$emit\s*\(/.test(s)) return [];
-      if (/\bemits\s*:/.test(s)) return [];
-      const m = /this\s*\.\s*\$emit\s*\(/.exec(s);
-      return [{ idx: m.index, line: lineOf(s, m.index), evidence: 'this.$emit(...) 但整份 script 里没有 emits:' }];
+      const fired = firedEmits(s, tpl ? stripComments(tpl) : '');
+      if (!fired.size) return [];
+      const declared = declaredEmits(s);
+      const out = [];
+      for (const [name, where] of fired) {
+        if (declared && declared.has(name)) continue;
+        out.push({
+          idx: 0,
+          line: eventLine(raw, name),
+          evidence: declared
+            ? `$emit('${name}')（在 ${where} 里）没有出现在 emits 声明里`
+            : `用了 $emit 却整份 script 里没有 emits:（第一个漏的是 '${name}'）`,
+        });
+      }
+      return out;
+    },
+  },
+  {
+    id: 'emits-no-dead',
+    rule: '§4',
+    name: '声明过的 emits 必须真的会被触发 —— 反向对账（登记了却用不到 = 宿主的监听永远不响）',
+    why: 'emits 是给宿主的契约：声明了却从不触发，等于承诺了一个不存在的事件。宿主写 @该事件 时不会报错，只是永远不执行；文档里的 @event 也成了假的',
+    fix: '要么把该事件真的发出去（this.$emit(...)），要么把它从 emits 与 JSDoc 的 @event 里删掉',
+    run: ({ script, tpl, raw }) => {
+      if (!script) return [];
+      const s = stripComments(script);
+      const declared = declaredEmits(s);
+      if (!declared || !declared.size) return [];
+      const fired = firedEmits(s, tpl ? stripComments(tpl) : '');
+      const out = [];
+      for (const name of declared) {
+        if (fired.has(name)) continue;
+        const m = new RegExp("['\"]" + reEsc(name) + "['\"]").exec(raw);
+        out.push({
+          idx: 0,
+          line: m ? lineOf(raw, m.index) : 1,
+          evidence: `emits 声明了 '${name}'，但全组件没有一处 $emit('${name}')`,
+        });
+      }
+      return out;
     },
   },
   {
@@ -266,7 +347,16 @@ const components = fs
 const found = [];
 let scanned = 0;
 /** 扫描面覆盖统计：某一类块取不到时，对应规则就变成「在空集上全绿」——必须显式报出来 */
-const coverage = { noScript: [], noTemplate: [], emitUsers: 0, emitsDeclared: 0, jsdocOk: 0 };
+const coverage = {
+  noScript: [],
+  noTemplate: [],
+  emitUsers: 0,
+  emitsDeclared: 0,
+  jsdocOk: 0,
+  /* 事件名级对账的**扫描面自证**：这两个数为 0 就说明「事件名对账」在空集上全绿 */
+  emitNamesDeclared: 0,
+  emitNamesFired: 0,
+};
 
 for (const c of components) {
   const dir = path.join(MODULES, c, 'components', c);
@@ -280,8 +370,12 @@ for (const c of components) {
     if (!tpl) coverage.noTemplate.push(`${c}/${f}`);
     if (script) {
       const s = stripComments(script);
-      if (/this\s*\.\s*\$emit\s*\(/.test(s)) coverage.emitUsers++;
-      if (/\bemits\s*:/.test(s)) coverage.emitsDeclared++;
+      const decl = declaredEmits(s);
+      const fired = firedEmits(s, tpl ? stripComments(tpl) : '');
+      if (fired.size) coverage.emitUsers++;
+      if (decl) coverage.emitsDeclared++;
+      coverage.emitNamesFired += fired.size;
+      coverage.emitNamesDeclared += decl ? decl.size : 0;
       const at = script.indexOf('export default');
       if (at > -1 && script.slice(0, at).includes('/**')) coverage.jsdocOk++;
     }
@@ -310,6 +404,10 @@ console.log(
     `template 块 ${scanned - coverage.noTemplate.length}/${scanned}   ` +
     `用到 $emit 的组件 ${coverage.emitUsers}（其中已声明 emits ${coverage.emitsDeclared}）   ` +
     `首块 JSDoc 齐备 ${coverage.jsdocOk}/${scanned}`
+);
+console.log(
+  `  事件名对账: 声明 ${coverage.emitNamesDeclared} 个 / 实际触发 ${coverage.emitNamesFired} 个` +
+    `（任一为 0 就说明这条对账在空集上全绿）`
 );
 
 const npmrcProblems = checkNpmrc();
@@ -364,7 +462,24 @@ if (coverage.noScript.length || coverage.noTemplate.length) {
   console.log('      改法：确认文件结构正常（AGENTS.md 第三节），或同步修本脚本的块提取');
 }
 
-if (fresh.length || npmrcProblems.length || stale.length || coverage.noScript.length || coverage.noTemplate.length) {
+/* 事件名对账的扫描面：解析不出任何事件名时，双向对账都是恒真 —— 必须当作失败 */
+const emitsScanDead = coverage.emitNamesDeclared === 0 || coverage.emitNamesFired === 0;
+if (emitsScanDead) {
+  console.log(
+    `\n  x 事件名对账的扫描面为空（声明 ${coverage.emitNamesDeclared} / 触发 ${coverage.emitNamesFired}）：` +
+      `\n      解析不出事件名时，declare-emits 与 emits-no-dead 两条规则都会在空集上判绿。` +
+      `\n      改法：先修本脚本的 declaredEmits / firedEmits 解析，别去改组件。`
+  );
+}
+
+if (
+  fresh.length ||
+  npmrcProblems.length ||
+  stale.length ||
+  coverage.noScript.length ||
+  coverage.noTemplate.length ||
+  emitsScanDead
+) {
   console.log('\n规则执行器校验未通过。\n');
   process.exit(1);
 }

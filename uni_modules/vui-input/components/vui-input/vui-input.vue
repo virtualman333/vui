@@ -9,8 +9,8 @@
 				:disabled="disabled"
 				:style="computedInputStyle"
 				@input="onInput"
-				@blur="triggerValidation('blur')"
-				@change="triggerValidation('change')"
+				@blur="onBlur"
+				@change="onChange"
 				class="custom-input"
 				:class="{ error: hasError }"
 			/>
@@ -34,8 +34,8 @@
  * @property {String} width 输入框宽度
  * @event {Function} update:modelValue 值变化时触发（v-model）
  * @event {Function} input 值变化时触发（兼容写法）
- * @event {Function} blur 失焦时触发
- * @event {Function} change 内容确认变化时触发
+ * @event {Function} blur 失焦时触发，参数为当前值
+ * @event {Function} change 内容确认变化时触发，参数为当前值
  */
 export default {
 	name: 'VuiInput',
@@ -107,6 +107,28 @@ export default {
 			this.$emit('update:modelValue', val);
 			this.$emit('input', val);
 			this.validateWith(val);
+		},
+		/**
+		 * 失焦：**先跑按 trigger 配置的校验，再把事件转发给宿主**。
+		 *
+		 * 为什么必须转发：这两个事件此前只跑校验、从不 `$emit`，而 `emits` 与 JSDoc
+		 * 都声明了它们、文档也写着「失焦时触发」。宿主写 `@blur="onBlur"` 时——
+		 * Vue 3 不会把**已声明**的事件透传到 `$attrs`，所以 handler 一次都不会执行，
+		 * 而且不报任何错。表单「失焦即校验/提交前确认」这类写法会静默失效。
+		 */
+		onBlur(event) {
+			this.triggerValidation('blur');
+			this.$emit('blur', this.inputValueOf(event));
+		},
+		/** 内容确认变化（uni 端在失焦或点确认时触发）：同样先校验再转发 */
+		onChange(event) {
+			this.triggerValidation('change');
+			this.$emit('change', this.inputValueOf(event));
+		},
+		/** 取事件里的当前值；事件结构因端而异时退回 `modelValue`（不编造、不写死路径） */
+		inputValueOf(event) {
+			const v = event && event.detail ? event.detail.value : undefined;
+			return v === undefined || v === null ? this.modelValue : v;
 		},
 		triggerValidation(triggerType) {
 			this.rules.forEach((rule) => {

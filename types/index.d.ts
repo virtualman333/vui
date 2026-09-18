@@ -560,9 +560,9 @@ export interface VuiInputEmits {
 	update: (...args: any[]) => void;
 	/** 值变化时触发（兼容写法） */
 	input: (...args: any[]) => void;
-	/** 失焦时触发 */
+	/** 失焦时触发，参数为当前值 */
 	blur: (...args: any[]) => void;
-	/** 内容确认变化时触发 */
+	/** 内容确认变化时触发，参数为当前值 */
 	change: (...args: any[]) => void;
 }
 
@@ -878,8 +878,10 @@ export interface VuiRegionPickerProps {
 
 /** 城市选择器 事件 */
 export interface VuiRegionPickerEmits {
-	/** */
+	/** 选完一列并确认时触发，参数为 picker 的 change 事件对象 */
 	change: (...args: any[]) => void;
+	/** 滚动某一列时触发（无参数）—— 用于联动刷新下一列的可选项 */
+	columnchange: (...args: any[]) => void;
 }
 
 export const VuiRegionPicker: DefineComponent<VuiRegionPickerProps>;

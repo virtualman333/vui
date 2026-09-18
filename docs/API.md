@@ -188,8 +188,8 @@
 | --- | --- |
 | `update` | :modelValue 值变化时触发（v-model） |
 | `input` | 值变化时触发（兼容写法） |
-| `blur` | 失焦时触发 |
-| `change` | 内容确认变化时触发 |
+| `blur` | 失焦时触发，参数为当前值 |
+| `change` | 内容确认变化时触发，参数为当前值 |
 
 ### vui-radio
 
@@ -344,7 +344,8 @@
 
 | 事件名 | 说明 |
 | --- | --- |
-| `change` | — |
+| `change` | 选完一列并确认时触发，参数为 picker 的 change 事件对象 |
+| `columnchange` | 滚动某一列时触发（无参数）—— 用于联动刷新下一列的可选项 |
 
 ### vui-date-picker
 
