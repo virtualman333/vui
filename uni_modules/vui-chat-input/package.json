@@ -1,7 +1,7 @@
 {
   "id": "vui-chat-input",
   "displayName": "vui-chat-input",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "VUI AI 对话输入框组件",
   "keywords": [
     "vui-chat-input"

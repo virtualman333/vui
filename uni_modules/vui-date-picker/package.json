@@ -1,7 +1,7 @@
 {
   "id": "vui-date-picker",
   "displayName": "vui-date-picker",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "VUI 日期选择器组件",
   "keywords": [
     "vui-date-picker"
