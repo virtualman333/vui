@@ -32,6 +32,13 @@
  * 删掉」。这样这张表不会烂成一张「什么都放行」的白名单（AGENTS.md 里已经写死过这条教训：
  * 一个会误报的检查最后一定会被加白名单加到失效）。
  *
+ * **豁免的前提必须有人证明（第 25 轮）**：`LAZY_RENDER` 每多一条，就多一个**没人验证过**的
+ * 断言 —— 「按设计不显示」与「根本显示不出来」在 DOM 上长得一模一样（`vui-tag` 整块不渲染
+ * 就是这么藏了半年）。所以本脚本额外往**临时副本**里装一个自动生成的**探针页**，按
+ * `LAZY_ACTIVATE` 把每个登记项置于可见状态并**严格**断言痕迹（探针页上不适用豁免）。
+ * 两张表键集合两向相等：往 `LAZY_RENDER` 加一条却忘了驱动片段，这里就会红。
+ * 探针页只存在于临时副本，仓库的 `pages.json` 一个字节都不动。
+ *
  * 为什么不在 `check:all` 里
  * -------------------------
  * 它需要本机的 HBuilderX（自带 node + vite）与 Chrome —— 而 `check:all` 必须能在**没装**的
@@ -94,6 +101,98 @@ const NO_CLASS_TRACE = {
     why: '模板只有一个 uni 原生 `<switch>`，全组件没有任何 class 字面量（连绑定里也没有）',
   },
 };
+/** `NO_CLASS_TRACE` 的 `observe` 是**标签名**，按 `<标签` 判（同样不许拿整份 DOM 搜字符串）。 */
+const observeHit = (observe, dom) => dom.includes(`<${observe}`);
+
+/**
+ * LAZY_ACTIVATE —— 让 `LAZY_RENDER` 里的每个组件**真的显示出来**的驱动片段。
+ *
+ * 为什么需要它：`LAZY_RENDER` 是一张**豁免表** —— 它说「这些组件在演示页上按设计首屏
+ * 无痕迹」。但「按设计不显示」与「根本显示不出来」在 DOM 上完全一样（`vui-tag` 整块
+ * 不渲染就是这么藏了半年）。也就是说，那张表每多一条，就多一个**没人验证过的断言**。
+ *
+ * 于是本脚本额外生成一个**探针页**，把所有登记项同时置于可见状态，并逐条断言痕迹：
+ *
+ *   - 探针页上**不适用任何豁免**（走严格判据）—— 它是「豁免的前提」的证明，不是又一层豁免；
+ *   - 两向：`LAZY_RENDER` 的每个键都必须有驱动片段；有片段却不在 `LAZY_RENDER` 里也要报错
+ *     （表会腐烂，两边一起锁）。
+ *
+ * 每个 `why` 都要说明**为什么这样就能让它显示**，不许写「大概能显示」。
+ */
+const LAZY_ACTIVATE = {
+  'vui-backtop': {
+    tpl: '<vui-backtop :scroll-top="9999" :visibility-height="0" />',
+    why: '可见性判据就是 `scrollTop >= visibilityHeight`（模板 `v-if="visible"`），两个数直接给足，不依赖真实滚动',
+  },
+  'vui-modal': {
+    tpl: '<vui-modal v-model="layer.modal" title="探针" content="探针" />',
+    state: { modal: true },
+    why: '根元素 `v-if="visible"`，把 v-model 的初值给成 true',
+  },
+  'vui-drawer': {
+    tpl: '<vui-drawer v-model="layer.drawer" title="探针"><text>探针</text></vui-drawer>',
+    state: { drawer: true },
+    why: '同 modal：根元素 `v-if="visible"`，v-model 初值为 true',
+  },
+  'vui-message': {
+    tpl: '<vui-message ref="mLayer" :duration="600000" />',
+    mount: 'this.$refs.mLayer && this.$refs.mLayer.show("探针");',
+    why: '靠 ref 调 `show()`；`:duration` 必须给大，否则自动关闭的定时器会在虚拟时间预算内先把它关掉',
+  },
+  'vui-notification': {
+    tpl: '<vui-notification ref="nLayer" :duration="600000" />',
+    mount: 'this.$refs.nLayer && this.$refs.nLayer.show({ title: "探针", message: "探针" });',
+    why: '同 message：ref + `show()`，并把自动关闭时长拉长',
+  },
+  'vui-chat-bubble': {
+    tpl: '<vui-chat-bubble content="探针" />',
+    why: '模板没有 v-if —— 演示页里它「没痕迹」只是因为待在 `v-for` 的空 `messages` 里；直接渲染即可',
+  },
+  'vui-feedback': {
+    tpl: '<vui-feedback />',
+    why: '同上：模板没有 v-if，演示页里位于空 `v-for` 内',
+  },
+  'vui-thinking': {
+    tpl: '<vui-thinking title="探针" content="探针" />',
+    why: '同上：模板没有 v-if，演示页里位于空 `v-for` 内',
+  },
+};
+
+/** 探针页路径（只存在于临时副本，不入库）。 */
+const PROBE_PAGE = 'pages/__probe__/probe';
+
+/**
+ * 按 `LAZY_ACTIVATE` 现算探针页源码。
+ *
+ * key 集合与 `LAZY_RENDER` 两向对齐（在 `tableIntegrity()` 里断言，由 `selfTest()` 在构建前
+ * 把关），所以**探针页与豁免表不会各自演化**：以后谁再往 `LAZY_RENDER` 里加一条，
+ * 这里不同时加片段就会红。
+ */
+function probePageSource() {
+  const keys = Object.keys(LAZY_ACTIVATE);
+  const tpl = keys.map((k) => `    ${LAZY_ACTIVATE[k].tpl}`).join('\n');
+  const state = Object.assign({}, ...keys.map((k) => LAZY_ACTIVATE[k].state || {}));
+  const mounts = keys
+    .map((k) => LAZY_ACTIVATE[k].mount)
+    .filter(Boolean)
+    .map((m) => `    ${m}`);
+  const lines = [
+    '<template>',
+    '  <view class="probe-page">',
+    tpl,
+    '  </view>',
+    '</template>',
+    '',
+    '<script>',
+    'export default {',
+    '  data() {',
+    `    return { layer: ${JSON.stringify(state)} };`,
+    '  },',
+  ];
+  if (mounts.length) lines.push('  mounted() {', ...mounts, '  },');
+  lines.push('};', '</script>', '');
+  return lines.join('\n');
+}
 
 /**
  * 允许出现在 console 里的日志。判据是「这句话不是缺陷」。
@@ -146,17 +245,23 @@ function probeChrome() {
 const stripHtmlComments = (s) => s.replace(/<!--[\s\S]*?-->/g, '');
 const stripJsonComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-function readPageList() {
-  const data = JSON.parse(stripJsonComments(fs.readFileSync(path.join(root, 'pages.json'), 'utf8')));
+/**
+ * 页面清单 / 页面源码一律从 `base` 现算（默认仓库根）。
+ *
+ * 探针页只存在于**临时副本**里（它会往 pages.json 里加一条、写一个 .vue），
+ * 所以这两个读函数必须能指向副本 —— 否则探针页会被当成「读不到源码的页面」。
+ */
+function readPageList(base = root) {
+  const data = JSON.parse(stripJsonComments(fs.readFileSync(path.join(base, 'pages.json'), 'utf8')));
   return (data.pages || []).map((x) => x.path).filter(Boolean);
 }
 
-const pageSource = (page) =>
-  fs.readFileSync(path.join(root, page.split('/').join(path.sep) + '.vue'), 'utf8');
+const pageSource = (page, base = root) =>
+  fs.readFileSync(path.join(base, page.split('/').join(path.sep) + '.vue'), 'utf8');
 
 /** 页面模板里用到的 `vui-*` 组件（剥掉注释再扫）。 */
-function componentsUsedBy(page) {
-  const hits = stripHtmlComments(pageSource(page)).match(/<(vui-[a-z0-9-]+)[\s/>]/g) || [];
+function componentsUsedBy(page, base = root) {
+  const hits = stripHtmlComments(pageSource(page, base)).match(/<(vui-[a-z0-9-]+)[\s/>]/g) || [];
   return [...new Set(hits.map((h) => h.slice(1).replace(/[\s/>]+$/, '')))].sort();
 }
 
@@ -187,15 +292,37 @@ function classTrace(comp) {
 }
 
 /**
- * 痕迹是否真的渲染进了 DOM。
+ * DOM 里出现过的 **class token**（只看 class 属性）。
+ *
+ * ⚠ 为什么不能拿整份 DOM 字符串去搜组件名（第 25 轮修）：演示页的正文里**就写着组件名**
+ * —— `pages/demo/ai.vue` 的 `vui-typing` 逐字吐出教学文案：「…vui-chat-bubble 负责气泡与头像；
+ * vui-thinking 可折叠…」。于是「这个组件根本没渲染」会被判成「渲染了」。
+ * 更坏的是打字机进度受 `--virtual-time-budget` 影响：**同一份代码时而判红时而判绿**
+ * ——实测同一次改动的两次运行，一次全绿、一次报 2 条（`vui-chat-bubble`、`vui-backtop`）。
+ *
+ * 而 `vui-chat-bubble` 在 `pages/demo/ai.vue` 里位于 `v-for="msg in messages"` 且
+ * `messages: []`，首屏**不可能**渲染 —— 那次「渲染了」是彻头彻尾的假绿。
+ * 判据收窄到 class 属性 token 之后，这类文本巧合再也骗不过它。
+ */
+function classTokens(dom) {
+  const out = [];
+  for (const m of dom.matchAll(/\bclass="([^"]*)"/g)) {
+    for (const t of m[1].split(/\s+/)) if (t) out.push(t);
+  }
+  return out;
+}
+
+/**
+ * 痕迹是否真的渲染进了 DOM —— **只看 class 属性**。
  *
  * ⚠ 以 `-` 结尾的片段（`:class="'vui-button--' + type"` 提取出来的就是 `vui-button--`）
- * **不能再要求词尾边界**：真实 DOM 里它后面接着 `default` / `primary`，加了 `(?![\w-])`
- * 会把「渲染得好好的」判成「没渲染」—— 这条假红是本脚本第一次真跑时抓出来的。
+ * 按**前缀**判定：真实 DOM 里它后面接着 `default` / `primary`，要求整 token 相等会把
+ * 「渲染得好好的」判成「没渲染」—— 这条假红是本脚本第一次真跑时抓出来的。
  */
 function traceInDom(trace, dom) {
-  const esc = trace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?<![\\w-])${esc}${trace.endsWith('-') ? '' : '(?![\\w-])'}`).test(dom);
+  return classTokens(dom).some(
+    (t) => t === trace || (trace.endsWith('-') && t.startsWith(trace))
+  );
 }
 
 // ─────────────────────────── 构建 ───────────────────────────
@@ -225,6 +352,31 @@ function patchManifest(srcDir) {
       anchor
   );
   fs.writeFileSync(p, s);
+}
+
+/**
+ * 往**临时副本**里装一个探针页：写 `pages/__probe__/probe.vue` 并把路径插进 `pages.json`。
+ *
+ * 只在副本里做 —— 仓库的 `pages.json` 一个字节都不动（探针页是给豁免表用的夹具，
+ * 不是一个用户会看到的演示页）。
+ *
+ * `pages.json` 必须是**合法 JSON 补丁**：用 JSON.parse → push → stringify，而不是正则往
+ * 文本里塞（`pages` 数组的缩进/尾逗号各版本都不一样，正则塞进去会造出非法 JSON，
+ * 而 uni-app 对非法 pages.json 的报错发生在构建深处，很难读）。
+ */
+function installProbePage(srcDir) {
+  if (!LAZY_ACTIVATE || !Object.keys(LAZY_ACTIVATE).length) {
+    throw new Error('LAZY_ACTIVATE 是空的 —— 探针页会渲染出一个空页面，那这条检查就是恒真的');
+  }
+  const dir = path.join(srcDir, PROBE_PAGE.split('/').slice(0, -1).join(path.sep));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, PROBE_PAGE.split('/').pop() + '.vue'), probePageSource(), 'utf8');
+
+  const p = path.join(srcDir, 'pages.json');
+  const text = fs.readFileSync(p, 'utf8');
+  const data = JSON.parse(stripJsonComments(text));
+  data.pages.push({ path: PROBE_PAGE, style: { navigationBarTitleText: '探针' } });
+  fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf8');
 }
 
 function build(hx, srcDir, outDir, distDir) {
@@ -354,9 +506,97 @@ function renderPage(chrome, profDir, url) {
 
 // ─────────────────────────── 主流程 ───────────────────────────
 
+/**
+ * 判据自检（每次都跑，不依赖任何环境）。
+ *
+ * 「痕迹判据」是整份检查的地基：它一旦退化成「在整份 DOM 里搜字符串」，
+ * 就会有组件**根本没渲染**却被判成渲染了 —— 而且症状是**随机绿**（打字机进度不同）。
+ * 地基不能只靠一次人工实测来保证，必须每次运行都自己证一遍。
+ */
+/**
+ * `LAZY_RENDER` 与 `LAZY_ACTIVATE` 两张表的一致性判据。
+ *
+ * **只有这一份实现**，调用点也只有一处（`selfTest()`，在真构建之前）：表是静态数据，
+ * 坏了就不该再花两分钟去起构建和浏览器。第 25 轮最初把它写了两遍（`selfTest()` 里比
+ * 排序后的键串、`main()` 里逐键两向比一遍），结果是**主流程那份永远跑不到** ——
+ * 自检先退出，等于写着一条不会响的检查。合并成函数后两向都保留，报错文案也带上了键名。
+ *
+ * - 豁免项没有驱动片段 → 那一条豁免的前提**没人证明**；
+ * - 有片段却不在豁免表里 → 表腐烂了（多出来的那份驱动没人知道它是干嘛的）；
+ * - 空的表 / 空的探针页 → 整条检查会恒真（没有组件要渲染，当然全绿）；
+ * - `why` 为空 → 以后没人知道这个片段为什么能让它显示，等于又回到「凭证式豁免」。
+ */
+function tableIntegrity() {
+  const bad = [];
+  const lazyKeys = Object.keys(LAZY_RENDER).sort();
+  const actKeys = Object.keys(LAZY_ACTIVATE).sort();
+  if (!lazyKeys.length) bad.push('LAZY_RENDER 是空的 —— 豁免表整个消失也不会有任何东西变红');
+  if (!actKeys.length) bad.push('LAZY_ACTIVATE 是空的 —— 探针页什么都没驱动，「豁免的前提」没有证明面');
+  for (const k of lazyKeys) {
+    if (!actKeys.includes(k)) {
+      bad.push(`LAZY_RENDER 里的 ${k} 没有探针驱动片段 —— 请补进 LAZY_ACTIVATE（否则「它其实能显示」没人证明）`);
+      continue;
+    }
+    if (!String((LAZY_ACTIVATE[k] || {}).why || '').trim()) {
+      bad.push(`LAZY_ACTIVATE 里的 ${k} 没写 why —— 必须说明「为什么这样就能让它显示」`);
+    }
+  }
+  for (const k of actKeys) {
+    if (!lazyKeys.includes(k)) {
+      bad.push(`LAZY_ACTIVATE 里的 ${k} 已不在 LAZY_RENDER 里了 —— 请把驱动片段删掉`);
+    }
+  }
+  if (!probePageSource().includes('vui-')) {
+    bad.push('探针页源码里没有任何组件 —— 它渲染出来会是个空页面，探针就成了恒真');
+  }
+  return bad;
+}
+
+function selfTest() {
+  const bad = [];
+  const eq = (name, got, want) => {
+    if (got !== want) bad.push(`${name}: 得到 ${JSON.stringify(got)}，期望 ${JSON.stringify(want)}`);
+  };
+
+  // ① 正文里出现组件名 **不算** 痕迹（这正是第 25 轮修掉的那类假绿）
+  eq(
+    '文本里的组件名不算痕迹',
+    traceInDom('vui-chat-bubble', '<text class="empty__text">vui-chat-bubble 负责气泡与头像</text>'),
+    false
+  );
+  // ② class 属性里的整 token 才算
+  eq('class token 算痕迹', traceInDom('vui-chat-bubble', '<view class="a vui-chat-bubble b">'), true);
+  eq('class 前缀不算整 token', traceInDom('vui-modal', '<view class="vui-modal-title">'), false);
+  // ③ 以 `-` 结尾的痕迹按前缀判（`:class="'vui-button--' + type"`）
+  eq('以 - 结尾按前缀判', traceInDom('vui-button--', '<view class="vui-button--primary">'), true);
+  eq('以 - 结尾也要真的对上前缀', traceInDom('vui-button--', '<view class="vui-button">'), false);
+  // ④ 多个 class 属性都要收（Vue 渲染出来的属性一律双引号 —— 只认双引号是刻意收窄）
+  eq(
+    'classTokens 收全',
+    classTokens('<view class="x"><view class="y z">').join(','),
+    'x,y,z'
+  );
+  // ⑤ NO_CLASS_TRACE 的 observe 判的是标签，不是正文里的字符串
+  eq('observe 判标签', observeHit('uni-switch', '<uni-switch class="x">'), true);
+  eq('observe 不认正文', observeHit('uni-switch', '<text>uni-switch</text>'), false);
+  // ⑥ 探针页的两张表必须真的对得上（空集合会让「两向校验」恒真）——
+  //    判据本体只在 `tableIntegrity()` 里，这里把它整段收进来
+  bad.push(...tableIntegrity());
+
+  return bad;
+}
+
 async function main() {
   const errors = [];
   const notes = [];
+
+  const st = selfTest();
+  if (st.length) {
+    console.log('\n[vui-uniapp] H5 实跑：**判据自检失败** —— 这份检查自己的判据坏了，后面所有结论都不可信。');
+    st.forEach((s) => console.log(`  x ${s}`));
+    console.log('  （为省时间没有真起浏览器与构建；自检通过后再跑。）\n');
+    process.exit(1);
+  }
 
   const hx = probeHBuilderX();
   const chrome = probeChrome();
@@ -402,6 +642,7 @@ async function main() {
     }
     copyTree(repoNm, path.join(srcDir, 'node_modules'), new Set());
     patchManifest(srcDir);
+    installProbePage(srcDir);
 
     console.log('  · 构建中 …');
     const b = build(hx, srcDir, outDir, distDir);
@@ -421,47 +662,63 @@ async function main() {
     const started = await serve(serveDir);
     server = started.server;
 
-    for (const page of pages) {
+    // 探针页加在最后：它只存在于临时副本，源码从 srcDir 读（`base` 参数）。
+    const renderPlan = [...pages.map((p) => ({ page: p, base: root, strict: false }))];
+    renderPlan.push({ page: PROBE_PAGE, base: srcDir, strict: true });
+
+    for (const { page, base, strict } of renderPlan) {
       const r = await renderPage(
         chrome.exe,
         path.join(profBase, page.split('/').pop()),
         `http://127.0.0.1:${started.port}/#/${page}`
       );
-      console.log(`  · ${page}：DOM ${r.dom.length} 字节，console ${r.logs.length} 条`);
+      console.log(
+        `  · ${page}${strict ? '（探针：豁免表的前提）' : ''}：DOM ${r.dom.length} 字节，console ${r.logs.length} 条`
+      );
 
       if (!r.dom.includes('<uni-page')) {
         errors.push(`${page} 渲染后 DOM 里没有 <uni-page —— 页面没挂载起来（白屏）`);
         continue;
       }
 
-      const used = componentsUsedBy(page);
+      const used = componentsUsedBy(page, base);
       const lazyHit = [];
       for (const comp of used) {
         const trace = classTrace(comp);
         const observed = trace
           ? traceInDom(trace, r.dom)
           : NO_CLASS_TRACE[comp]
-            ? r.dom.includes(NO_CLASS_TRACE[comp].observe)
+            ? observeHit(NO_CLASS_TRACE[comp].observe, r.dom)
             : false;
 
         if (observed) {
           if (LAZY_RENDER[comp]) lazyHit.push(comp);
           continue;
         }
-        if (LAZY_RENDER[comp]) continue;
+        // 探针页上不适用豁免：那张表的前提就是「它其实显示得出来」，
+        // 所以在**专门把它置于可见状态**的页面上再豁免一次，就等于什么也没证明。
+        if (!strict && LAZY_RENDER[comp]) continue;
         if (!trace && !NO_CLASS_TRACE[comp]) {
           errors.push(`${page} 用到 <${comp}>，但它的模板里没有任何可判定的类名 —— 请登记进 NO_CLASS_TRACE`);
         } else if (!trace) {
-          errors.push(`${page} 用到 <${comp}>，但 DOM 里既没有类名痕迹、也没有 ${NO_CLASS_TRACE[comp].observe}`);
+          errors.push(`${page} 用到 <${comp}>，但 DOM 里既没有类名痕迹、也没有 <${NO_CLASS_TRACE[comp].observe}`);
         } else {
           errors.push(
             `${page} 用到 <${comp}>，DOM 里却找不到它的痕迹 \`${trace}\` —— 组件没渲染出来` +
-              '（页面上凭空少一块，且不会有任何报错）。它确实是按设计懒渲染的话，请登记进 LAZY_RENDER 并写清理由'
+              '（页面上凭空少一块，且不会有任何报错）。它确实是按设计懒渲染的话，请登记进 LAZY_RENDER 并写清理由' +
+              (strict ? '。⚠ 这里是探针页：它已经被置于可见状态，豁免不适用 —— 说明这个组件根本显示不出来' : '')
           );
         }
       }
+      // 豁免项在演示页上真的渲染出来了 —— 只作为**说明**打印，不判红。
+      // 判据本身是非确定的：backtop 的可见性取决于滚动（`scrollTop >= visibilityHeight`，
+      // 而滚动位置受虚拟时间/恢复状态影响），chat 三件套取决于 v-for 里的实际数据。
+      // 「同一个组件时而出现时而消失」的观察不能进退出码 —— 那会变成一条随机红的检查。
+      // 「表会腐烂」由另外两条确定判据守住：键集合与 LAZY_ACTIVATE 两向相等 + 必须仍被演示页引用。
       if (lazyHit.length) {
-        errors.push(`${page}：这些组件已经真的渲染出痕迹了，请把 LAZY_RENDER 里的登记删掉 —— ${lazyHit.join('、')}`);
+        notes.push(
+          `${page}：${lazyHit.join('、')} 本次真的渲染出痕迹了（豁免只在运行时条件下成立，不算缺陷）`
+        );
       }
 
       for (const line of r.logs) {
@@ -470,7 +727,13 @@ async function main() {
       }
     }
 
-    // 登记表两向：表里的组件必须仍被某个演示页用到，且理由描述的现象仍成立
+    // ── 豁免表的两向（第 25 轮新增）───────────────────────────────
+    // 判据本体只有一份：`tableIntegrity()`，已在 `selfTest()` 里跑过、坏了根本走不到这里
+    //（那是有意的：表坏了不值当花两分钟真构建）。此处**不再重复写一遍**比较逻辑 ——
+    // 写两遍的那一版实测永远跑不到，等于一条不会响的检查。
+    // 下面这些才是**需要实跑结果**才能判的：登记项必须仍被某个演示页（不含探针页）用到。
+
+    // 登记表两向：表里的组件必须仍被某个**演示页**（不含探针页）用到，且理由描述的现象仍成立
     const allUsed = new Set(pages.flatMap((p) => componentsUsedBy(p)));
     for (const comp of Object.keys(LAZY_RENDER)) {
       if (!allUsed.has(comp)) errors.push(`LAZY_RENDER 里的 ${comp} 已经没有任何演示页在用了 —— 请把登记删掉`);
