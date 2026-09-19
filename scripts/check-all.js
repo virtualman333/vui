@@ -24,6 +24,10 @@
  *   - 入口指向的文件不存在                  → 失败
  *   - `scripts/check-*.js` 没有对应入口     → 失败
  *   - 清单条数不足 FLOOR 条                 → 失败
+ *   - `OFF_CHAIN` 里登记的**离链**入口不见了 → 失败
+ * 最后一条同样重要：**离链入口不在链上，所以链不会替它报错**。`check:h5`（真构建 H5 +
+ * 真浏览器跑演示页）需要本机 HBuilderX 与 Chrome，不能进链（链要能在没装的机器上跑），
+ * 于是「它还在不在」这件事没有任何东西在管 —— 由 `OFF_CHAIN` 补上，两向都锁。
  * 最后一条尤其重要：枚举一旦失灵，其余断言会**在空集上全绿**（本仓
  * `check:rules` 已写过「避免解析失灵导致规则在空集上全绿」这条自证），
  * 所以判据必须带一条「清单足够长」的不变量。
@@ -31,7 +35,7 @@
  * 自证
  * ----
  * `plan()` 是纯函数（输入是 package.json 对象 + scripts/ 下的文件名），
- * 本脚本每次运行都会**无条件**先跑一遍 `selfTest()`：四类坏输入必须被判出、同一批输入
+ * 本脚本每次运行都会**无条件**先跑一遍 `selfTest()`：七类坏输入必须被判出、同一批输入
  * 正常时必须判绿。所以「守卫自己坏掉」不会表现为静默通过。
  *
  * 用法：node scripts/check-all.js   （= npm run check:all）
@@ -49,6 +53,19 @@ const FLOOR = 12;
 const ENTRY_RE = /^node\s+scripts\/([\w.-]+\.js)$/;
 
 /**
+ * **离链**入口：不该进校验链，但也不许静默消失。
+ *
+ * `check:h5`（真构建 H5 + 真浏览器跑三个演示页）需要本机的 HBuilderX 与 Chrome，
+ * 而本文件开头那条总原则要求「校验链必须能在没装的机器上跑」，所以它不能进链。
+ * 但「离链」不等于「可以烂在角落里没人管」—— 它一旦被删掉，链上不会有任何东西变红。
+ * 所以它的存在性由这里盯着：登記的条目必须真的在 package.json 里、形态合法、文件存在。
+ */
+const OFF_CHAIN = {
+  'check:h5':
+    '真构建 H5 + headless Chrome 跑演示页（要 HBuilderX 与 Chrome），没装工具链的机器上跑不了 —— 它自己会以非 0 退出并打印「未验证」，见 AGENTS.md 第八节',
+};
+
+/**
  * 由 package.json + scripts/ 文件名算出「要跑哪些」与「哪些不对劲」。**纯函数**。
  *
  * @param {Record<string,string>} table package.json 的 scripts 段
@@ -58,7 +75,7 @@ const ENTRY_RE = /^node\s+scripts\/([\w.-]+\.js)$/;
 function plan(table, scriptFiles) {
   const errors = [];
   const names = Object.keys(table).filter(
-    (k) => k !== 'check:all' && (k === 'check' || k.startsWith('check:'))
+    (k) => k !== 'check:all' && !Object.prototype.hasOwnProperty.call(OFF_CHAIN, k) && (k === 'check' || k.startsWith('check:'))
   );
 
   // ① 清单必须够长：枚举失灵时不能变成「0 条检查，全部通过」
@@ -98,6 +115,23 @@ function plan(table, scriptFiles) {
     );
   }
 
+  // ④ 离链入口：**不在链上，所以链不会替它报错** —— 必须由这里盯着它还在不在
+  for (const [name, why] of Object.entries(OFF_CHAIN)) {
+    const value = String(table[name] ?? '').trim();
+    if (!value) {
+      errors.push(
+        `离链入口 \`${name}\` 在 package.json 里没有了 —— 它不在链上，没有任何一条会替它变红。理由：${why}`
+      );
+      continue;
+    }
+    const m = ENTRY_RE.exec(value);
+    if (!m) {
+      errors.push(`离链入口 \`${name}\` 的值不是 \`node scripts/xxx.js\` 形态（实际：${JSON.stringify(value)}）。`);
+    } else if (!scriptFiles.includes(m[1])) {
+      errors.push(`离链入口 \`${name}\` 指向的 scripts/${m[1]} 不存在。`);
+    }
+  }
+
   return { names, errors };
 }
 
@@ -107,9 +141,13 @@ function plan(table, scriptFiles) {
  */
 function selfTest() {
   const files = ['check-ok.js', 'check-probe.js'];
-  const base = { 'check:all': 'node scripts/check-all.js' };
+  // `check:h5` 是离链入口（在 OFF_CHAIN 里），它必须出现在基线里 —— 否则每条用例都会
+  // 额外报一次「离链入口没有了」，那就分不清是「用例注入生效」还是「基线自己就是坏的」。
+  const base = { 'check:all': 'node scripts/check-all.js', 'check:h5': 'node scripts/check-ok.js' };
   const full = { ...base };
   for (let i = 0; i < FLOOR; i += 1) full[`check:dummy${i}`] = 'node scripts/check-ok.js';
+  const noOff = { ...full };
+  delete noOff['check:h5'];
 
   const cases = [
     { name: '正常输入', table: full, files: files.filter((f) => f === 'check-ok.js'), want: [] },
@@ -137,31 +175,59 @@ function selfTest() {
       files: files.filter((f) => f === 'check-ok.js'),
       want: ['下限'],
     },
+    {
+      name: '注入·离链入口被删掉（它不在链上，没有别人会替它报错）',
+      table: noOff,
+      files: files.filter((f) => f === 'check-ok.js'),
+      want: ['离链入口'],
+    },
+    {
+      name: '注入·离链入口指向的文件不存在',
+      table: { ...full, 'check:h5': 'node scripts/check-gone.js' },
+      files: files.filter((f) => f === 'check-ok.js'),
+      want: ['check-gone.js'],
+    },
+    {
+      name: '正常输入·离链入口不许混进链里',
+      table: full,
+      files: files.filter((f) => f === 'check-ok.js'),
+      want: [],
+      // 额外的硬断言：`check:h5` 必须**不在** names 里（它要是被当成链上的一条，就等于
+      // 把「需要 HBuilderX」偷偷变成发布前必过 —— 没装的机器上整条链会红）
+      notIn: ['check:h5'],
+    },
   ];
 
   let bad = 0;
   console.log('\n[vui-uniapp] 校验链清单的自证');
   for (const c of cases) {
     let got = [];
+    let names = [];
     try {
-      got = plan(c.table, c.files).errors;
+      const r = plan(c.table, c.files);
+      got = r.errors;
+      names = r.names;
     } catch (e) {
       got = [`抛异常：${e && e.message}`];
     }
     const hit = c.want.every((w) => got.some((g) => g.includes(w)));
     const extra = c.want.length === 0 ? got.length === 0 : true;
-    if (hit && extra) {
+    const leak = (c.notIn || []).filter((n) => names.includes(n));
+    if (hit && extra && !leak.length) {
       console.log(`  ok  ${c.name}`);
     } else {
       bad += 1;
-      console.log(`  x   ${c.name}\n      期望含：${JSON.stringify(c.want)}\n      实际：${JSON.stringify(got)}`);
+      console.log(
+        `  x   ${c.name}\n      期望含：${JSON.stringify(c.want)}　不许进链：${JSON.stringify(c.notIn || [])}\n` +
+          `      实际错误：${JSON.stringify(got)}\n      实际链上：${JSON.stringify(names)}`
+      );
     }
   }
   if (bad) {
     console.log('\n  校验链的自证没通过 —— 下面这次「全绿」不可信。\n');
     return false;
   }
-  console.log('  4 类坏输入都被判出，正常输入判绿。\n');
+  console.log('  7 类坏输入都被判出，正常输入判绿。\n');
   return true;
 }
 

@@ -17,6 +17,20 @@
  * 不依赖括号配对或 AST——早期实现用括号计数解析成员列表，会被正则字面量里的
  * `[.)]`、反引号等字符带偏，产生大量假问题，故弃用。
  *
+ * ⚠ **先剥注释再判**（第 25 轮补的）
+ * ---------------------------------
+ * 此前它是直接拿 `<template>` 原文判的，于是**注释里的代码被当成真代码**，两个方向都错：
+ *
+ *   假红：本轮修 `vui-tag` 时在模板注释里写了「这里此前是 `v-if="os == 'android'"`」
+ *         说明历史缺陷 —— 检查随即报「模板引用了 script 中不存在的标识符：os」，
+ *         `check:all` 三条（check / check:template / check:components）一起变红，
+ *         而模板里一个 `os` 都没有。**解释缺陷的注释把检查弄红了。**
+ *   假绿（更坏）：类型一是拿 `<script>` 原文找名字的，所以某个真缺的标识符只要在
+ *         script 的**注释**里被提过一次，就会被当成「它存在」而放行。
+ *
+ * 剥注释复用 `scripts/lib/source.js` 的那一份（本仓已有唯一实现，连 `<!-- -->` 与
+ * 字符串字面量保护都写好了）—— 再抄一份就是「同一件事写两处」。
+ *
  * 用法：
  *   node scripts/check-template-refs.js        # 独立运行
  *   const { checkTemplateRefs } = require('./check-template-refs');   // 被 prepublish-check 复用
@@ -25,6 +39,8 @@ const fs = require('fs');
 const path = require('path');
 // `.vue` 枚举的唯一来源（本文件旧实现自己 walk 了一份）
 const { vueFiles } = require('./lib/components');
+// 「剥注释」的唯一来源（check-rules / check-api 用的是同一份）
+const { stripComments } = require('./lib/source');
 
 const root = path.resolve(__dirname, '..');
 
@@ -99,10 +115,115 @@ function collectRefs(tpl) {
   return { refs, local };
 }
 
+/**
+ * 单个文件的判定。抽成函数是为了让自证能拿**合成输入**喂它 ——
+ * 「拿仓库当前状态当自证输入」的自证，仓库一变它就跟着变，等于没有自证。
+ *
+ * 进来的 `tplRaw` / `scriptRaw` 都先过一遍 `stripComments`。
+ */
+function scanOne(tplRaw, scriptRaw, rel) {
+  const out = [];
+  const tpl = stripComments(tplRaw);
+  const script = stripComments(scriptRaw);
+  const { refs, local } = collectRefs(tpl);
+
+  // 类型一：模板引用了 script 中不存在的标识符
+  const missing = [];
+  for (const [name, frag] of [...refs.entries()].sort()) {
+    if (RESERVED.has(name) || local.has(name)) continue;
+    const re = new RegExp(`(?<![.\\w$])${name.replace(/[$]/g, '\\$&')}(?![\\w$])`);
+    if (re.test(script)) continue;
+    missing.push(`${name}  <-  ${frag}`);
+  }
+  if (missing.length) {
+    out.push(`[${rel}] 模板引用了 script 中不存在的标识符：\n      ${missing.join('\n      ')}`);
+  }
+
+  // 类型二：模板引用了模块级常量 / 函数（Vue3 模板作用域访问不到）
+  const dm = script.search(/\bexport\s+default/);
+  const head = dm >= 0 ? script.slice(0, dm) : '';
+  const moduleNames = new Set();
+  for (const mm of head.matchAll(/^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)/gm)) moduleNames.add(mm[1]);
+  for (const mm of head.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)/gm)) moduleNames.add(mm[1]);
+
+  const scopeBad = [];
+  for (const name of [...moduleNames].sort()) {
+    if (RESERVED.has(name) || local.has(name)) continue;
+    const re = new RegExp(`(?<![.\\w$])${name.replace(/[$]/g, '\\$&')}(?![\\w$])`);
+    if (re.test(tpl)) scopeBad.push(name);
+  }
+  if (scopeBad.length) {
+    out.push(
+      `[${rel}] 模板引用了模块级常量/函数（运行时不可访问）：${scopeBad.join(', ')}\n` +
+        '      请改为 props 默认值或 computed 中转'
+    );
+  }
+  return out;
+}
+
+/**
+ * 判据自证。**每次运行都会走一遍**，四类合成输入必须判对。
+ *
+ * 正控与反控成对写：只测「坏形态必须报」会纵容一个「见谁都报」的实现，
+ * 只测「好形态不许报」会纵容一个空转的实现。第 1、2 条就是本轮踩的那个坑的两面。
+ */
+function selfTest() {
+  const cases = [
+    {
+      name: '反控·模板注释里的代码不算「模板引用了它」',
+      tpl: '<!-- <text v-if="os == \'android\'">历史写法</text> --><text class="vui-tag">{{ text }}</text>',
+      script: 'export default { props: { text: { type: String } } };',
+      want: [],
+    },
+    {
+      name: '正控·只在 script 注释里出现的名字不算「它存在」',
+      tpl: '<text v-if="ghost">{{ ghost }}</text>',
+      script: '// ghost 只是被提了一句，并没有定义\nexport default {};',
+      want: ['ghost'],
+    },
+    {
+      name: '反控·真声明过的名字不许报',
+      tpl: '<text>{{ real }}</text>',
+      script: 'export default { data() { return { real: 1 }; } };',
+      want: [],
+    },
+    {
+      name: '正控·模块级常量被模板引用要报',
+      tpl: '<text>{{ VUI_COLOR }}</text>',
+      script: 'const VUI_COLOR = { a: 1 };\nexport default {};',
+      want: ['VUI_COLOR'],
+    },
+  ];
+
+  const failures = [];
+  console.log('  判据自证:');
+  for (const c of cases) {
+    let got = [];
+    try {
+      got = scanOne(c.tpl, c.script, '合成样例');
+    } catch (e) {
+      got = [`抛异常：${e && e.message}`];
+    }
+    const hit = c.want.every((w) => got.some((g) => g.includes(w)));
+    const extra = c.want.length === 0 ? got.length === 0 : true;
+    if (hit && extra) {
+      console.log(`    ok  ${c.name}`);
+    } else {
+      const msg = `判据自证未通过·${c.name}（期望含 ${JSON.stringify(c.want)}，实际 ${JSON.stringify(got)}）`;
+      console.log(`    x   ${msg}`);
+      failures.push(msg);
+    }
+  }
+  return failures;
+}
+
 function checkTemplateRefs(options = {}) {
   const quiet = !!options.quiet;
   const errors = [];
   const warns = [];
+  if (!quiet) console.log('\n[vui-uniapp] 模板作用域校验');
+  // 判据自己坏掉时不能表现为「未发现问题」—— 先无条件跑一遍自证
+  errors.push(...selfTest());
 
   // 枚举走 scripts/lib/components.js —— 它同时是 prepublish-check 里「组件数」的来源，
   // 两处数字一致才有意义（旧实现各 walk 一次，能同时打印 48 与 49）
@@ -114,46 +235,11 @@ function checkTemplateRefs(options = {}) {
     const sm = src.match(/<script>([\s\S]*?)<\/script>/);
     if (!tm || !sm) continue;
 
-    const tpl = tm[1];
-    const script = sm[1];
     const rel = file.replace(root + path.sep, '').replace(/\\/g, '/');
-    const { refs, local } = collectRefs(tpl);
-
-    // 类型一：模板引用了 script 中不存在的标识符
-    const missing = [];
-    for (const [name, frag] of [...refs.entries()].sort()) {
-      if (RESERVED.has(name) || local.has(name)) continue;
-      const re = new RegExp(`(?<![.\\w$])${name.replace(/[$]/g, '\\$&')}(?![\\w$])`);
-      if (re.test(script)) continue;
-      missing.push(`${name}  <-  ${frag}`);
-    }
-    if (missing.length) {
-      errors.push(`[${rel}] 模板引用了 script 中不存在的标识符：\n      ${missing.join('\n      ')}`);
-    }
-
-    // 类型二：模板引用了模块级常量 / 函数（Vue3 模板作用域访问不到）
-    const dm = script.search(/\bexport\s+default/);
-    const head = dm >= 0 ? script.slice(0, dm) : '';
-    const moduleNames = new Set();
-    for (const mm of head.matchAll(/^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)/gm)) moduleNames.add(mm[1]);
-    for (const mm of head.matchAll(/^\s*function\s+([A-Za-z_$][\w$]*)/gm)) moduleNames.add(mm[1]);
-
-    const scopeBad = [];
-    for (const name of [...moduleNames].sort()) {
-      if (RESERVED.has(name) || local.has(name)) continue;
-      const re = new RegExp(`(?<![.\\w$])${name.replace(/[$]/g, '\\$&')}(?![\\w$])`);
-      if (re.test(tpl)) scopeBad.push(name);
-    }
-    if (scopeBad.length) {
-      errors.push(
-        `[${rel}] 模板引用了模块级常量/函数（运行时不可访问）：${scopeBad.join(', ')}\n` +
-          '      请改为 props 默认值或 computed 中转'
-      );
-    }
+    errors.push(...scanOne(tm[1], sm[1], rel));
   }
 
   if (!quiet) {
-    console.log('\n[vui-uniapp] 模板作用域校验');
     console.log(`  扫描文件数: ${vueFilesList.length}`);
     if (errors.length) {
       console.log('\n  错误:');
@@ -167,7 +253,7 @@ function checkTemplateRefs(options = {}) {
   return { errors, warns, stats: { files: vueFilesList.length } };
 }
 
-module.exports = { checkTemplateRefs, collectRefs, stripLiterals };
+module.exports = { checkTemplateRefs, collectRefs, scanOne, selfTest, stripLiterals };
 
 if (require.main === module) {
   const { errors } = checkTemplateRefs();

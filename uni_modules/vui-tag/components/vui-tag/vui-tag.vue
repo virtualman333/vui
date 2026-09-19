@@ -1,7 +1,10 @@
 <template>
-	<!-- 解决在IOS小程序下的显示字符较小的问题 -->
-	<text v-if="os == 'android' && text" class="vui-tag" :class="classes" :style="customStyle" @click="onClick">{{ text }}</text>
-	<text v-if="os == 'ios' && text" class="vui-tag" style="font-weight: bold" :class="classes" :style="customStyle" @click="onClick">{{ text }}</text>
+	<!-- iOS 端（含小程序）字号偏小，用字重补偿 —— 但那是**装饰差异**，不许写成根节点的条件。
+	     这里此前是两行并列的 `v-if="os == 'android'"` / `v-if="os == 'ios'"`，而 `os` 取自
+	     `uni.getSystemInfoSync().osName`：H5 桌面上是 `windows`、macOS 上是 `macOS`，
+	     两个小写串都不匹配 → **整个标签什么都不渲染**（页面上凭空少一块，没有任何报错）。
+	     现在「渲染与否」只由 `text` 决定，平台只影响一个 class。 -->
+	<text v-if="text" class="vui-tag" :class="classes" :style="customStyle" @click="onClick">{{ text }}</text>
 </template>
 
 <script>
@@ -75,7 +78,8 @@ export default {
 	},
 	data() {
 		return {
-			os: 'ios'
+			/** 是否 iOS 端 —— **只影响字重**，不参与「渲染与否」（见模板注释） */
+			isIos: false
 		};
 	},
 
@@ -91,18 +95,22 @@ export default {
 				isTrue(mark) ? 'vui-tag--mark' : '',
 				// type === 'default' ? 'vui-tag--default' : 'vui-tag-text',
 				isTrue(inverted) ? 'vui-tag--inverted vui-tag-text--' + type : '',
-				size === 'small' ? 'vui-tag-text--small' : ''
+				size === 'small' ? 'vui-tag-text--small' : '',
+				this.isIos ? 'vui-tag--ios-bold' : ''
 			];
 			// 返回类的字符串，兼容字节小程序
 			return classArr.join(' ');
 		}
 	},
 	mounted() {
-		var that = this;
-		var res = uni.getSystemInfoSync();
-		console.log(res.osName);
-
-		this.os = res.osName;
+		// osName 的大小写各端不一致（App / 小程序端是小写 `ios`，H5 桌面上是 `windows`），
+		// 所以按小写比较。**判断失败也不影响渲染** —— 它只是不加粗。
+		try {
+			const res = uni.getSystemInfoSync();
+			this.isIos = String((res && res.osName) || '').toLowerCase() === 'ios';
+		} catch (err) {
+			this.isIos = false;
+		}
 	},
 	methods: {
 		isTrue(value) {
@@ -259,6 +267,12 @@ $tag-mini-pd: 1px 3px;
 		cursor: not-allowed;
 		/* #endif */
 	}
+}
+
+/* iOS 端字号偏小 —— 用复合选择器保证盖过 `.vui-tag` 的 `font-weight: 200`，
+   与声明顺序无关（原先这一条写死在模板的内联 style 里） */
+.vui-tag.vui-tag--ios-bold {
+	font-weight: bold;
 }
 
 .vui-tag-text {

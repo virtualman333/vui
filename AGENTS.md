@@ -211,6 +211,7 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 | `npm run check:components` | 组件枚举与结构检查的自检：在仓库副本里注入「`.vue` 名字写错」「缺 `components/` 目录」两种坏结构，`prepublish-check` 必须拦下并点名；外加四条结构/行为锁（组件枚举只有一份、组件数 == `.vue` 数、**临时副本的删除只有 `rmTemp` 一条出口**、**清理函数对删不掉的目录不得抛错**） |
 | `npm run check:markdown` | vui-markdown 解析器的**行为测试**（真的执行组件代码的检查之一）：用 `@vue/compiler-sfc` 取出 `<script>` 求值出组件选项，逐个断言表格识别 / 列数补齐 / 对齐标记 / `\|` 转义 / 普通文本不得被误判 / 围栏优先级，外加「模板里的表格必须在 `scroll-view scroll-x` 里」的结构锁 |
 | `npm run check:logic` | **纯函数型组件的行为测试**（真的执行组件代码的检查之一，与 `check:markdown` 同一套求值方式）：slider（步长网格锚点必须是 `min` 而非 0、精度按 `step` 的小数位取、负区间、非法 `step`、`min===max`）、time-picker（四种 `showSeconds` / `min` / `max` 精度组合、输出精度恒等于组件精度、区间内原样通过）、pagination（页码上下界、0 条、`update()` 夹取、`pagerCount` 非法、字符串 `modelValue`、省略号）。断言条数有下限，且带「三个组件的被测入口都真的加载出来了」的自证 |
+| `npm run check:h5` | **唯一会真的把库跑起来的一条（离链，不在 `check:all` 里）**：用 HBuilderX 自带的 node + vite 在临时副本里构建 H5，起本地服务，用 headless Chrome 打开 `pages.json` 里的每个页面，断言渲染后的 DOM —— 每个被用到的 `vui-*` 组件都必须把自己模板里的静态类名痕迹渲染出来；console 不许有未登记的日志 |
 | `npm run check:category` | `gen-docs.py` 的 `CATEGORY` 白名单不变量：每个组件**恰好登记一次**（同一分类内写两遍、或跨分类重复，一律失败）、与 `uni_modules/` 双向覆盖、id 命名规范、解析失败即失败；外加**「数量声称 vs 独立真值」对账**（README 里每处「N 个组件 / N 个 AI 组件」必须等于文件系统 / 白名单的真值，演示页 hero 文案那处手写的也一并钉住）。解析器在 `scripts/lib/category.js`（与 `check-gen` 共用同一份） |
 | `npm run check:api` | props / 插槽 两面契约的对账：`props-no-dead`（声明的 prop 全库必须有人读）、`props ↔ @property`、模板 `<slot> ↔ @slot` 三组都要两向，外加**产物 ↔ 源码**（`types/index.d.ts` 的 `<Pascal>Props` 字段、`docs/API.md` 的属性表与插槽表，与源码**逐位相等** —— 这一组是链上唯一拦得住「生成器静默丢 prop」的检查）。动态插槽名（`:name="column.key"`）静态抓不到，必须登记在脚本里的 `DYNAMIC_SLOTS`。解析器在 `scripts/lib/source.js`（与 `check-rules` 共用同一份，不再各留一个 `stripComments`） |
 
@@ -226,7 +227,35 @@ npm run check:pack  # 想看用户实际拿到什么时单独跑（check:all 已
 
 `jsdoc-first` 是同一种病：它此前只判「`export default` 之前有没有 `/**`」—— 而辅助函数的注释同样满足这个形状，所以它**一次都没响过**。实测把一段模块级辅助函数的 `/** */` 排在组件描述之前（`vui-slider` 的 `decimalsOf`），产物侧 `firstJsDoc` 取到的首块就变成了那段辅助说明：`README.md` 与 `docs/API.md` 的描述列印出「step 的小数位数 —— …」，同时 8 个 prop 全部报「JSDoc 里没有对应的 `@property`」。第四节第 1 条本来就写着「首块 JSDoc 必须存在**且是 `<script>` 中第一个 `/** */` 块**」—— 文档没错，是检查只做了前半句。现在同样拆成两向（`jsdoc-first` / `jsdoc-desc-is-first`），并把扫描面里「首块 JSDoc 是组件描述」的计数一起打出来。**写下来没人执行的规则会烂，写下来执行不动的规则更坏** —— 它会让后来的人以为有人守着。
 
-`check:all` 全部是静态校验，**不依赖 HBuilderX**。本机已装 HBuilderX（`D:\Program Files\HBuilderX`，可直接复用它自带的 node + vite 构建 H5 产物做浏览器实跑），但校验链必须能在没装的机器上跑，所以不把它接进 `check:all`；由于至今**没有任何一轮做过 H5 / 真机实跑**，改组件后仍必须在提交信息里说明未做实跑验证。
+`check:all` 全部是静态校验，**不依赖 HBuilderX**。本机已装 HBuilderX（`D:\Program Files\HBuilderX`，可直接复用它自带的 node + vite 构建 H5 产物做浏览器实跑），但校验链必须能在没装的机器上跑，所以 H5 实跑**不接进 `check:all`** —— 它是独立的 `npm run check:h5`（下一段）。
+
+### `check:h5` —— 唯一会真的把库跑起来的一条
+
+在此之前，本文档这一行写的是「**至今没有任何一轮做过 H5 / 真机实跑**」。那意味着上面十五条
+**全部是静态的**：语法、主题变量、产物一致性、tarball 清单、组件枚举 —— 它们可以全绿，而组件
+**渲染出来的东西是错的，甚至根本没渲染**。第一节又承诺「支持 iOS / Android / H5 / 各家小程序」，
+这条承诺此前**没有任何东西在扛**。
+
+第一次跑就抓到：`vui-tag` 的根节点是两行并列的 `v-if="os == 'android'"` / `v-if="os == 'ios'"`，
+而 `os` 取自 `uni.getSystemInfoSync().osName` —— H5 桌面上是 `windows`、macOS 上是 `macOS`，
+两个小写串都不匹配 → **整个标签在所有页面上什么都不渲染**，且**没有任何报错**。同时抓出 5 处
+`console.log` 进了生产包（`vui-tag` 1 处、`vui-region-picker` 4 处）。
+
+它做四件事，判据全部从源码 / DOM 现算、不手抄清单：
+
+1. **产物完整性**：`index.html` 引用的每个本地资源都真的在磁盘上（线上 404 就是这么来的）；
+2. **页面真的挂载**：`pages.json` 里的每个页面都要渲染出 `<uni-page`；
+3. **痕迹**：页面用到的每个组件，必须把自己**模板**里的那个静态类名片段渲染进 DOM。
+   按设计首屏无痕迹的（`v-if="visible"` 的弹层、要滚动才出现的 backtop、空 `v-for` 里的
+   chat 组件）登记在 `LAZY_RENDER`，**且登记表两向**：登记了却渲染出痕迹 → 报「请把登记删掉」；
+4. **console 不许有未登记的日志**（生产包里带调试输出、或运行时报错，都在这条）。
+
+**离链不等于可以静默不跑**：工具链缺失（HBuilderX / Chrome 找不到、临时目录含非 ASCII）时，
+它**打印缺什么并以非 0 退出**，绝不会打印「通过」。`check-all.js` 的 `OFF_CHAIN` 登记表反过来
+盯着它 —— 这个入口被删掉时会红，因为**它不在链上，没有别人会替它报错**。
+
+**改组件后跑一次 `npm run check:h5`**（本机有 HBuilderX）。它不能用 `#ifdef` 之类的条件编译
+绕过 —— 那正是它要抓的东西。
 
 `check:release` 补的是**发布链自身**的盲区：`check:all` 里的其余各条都在看「要发出去的东西对不对」，没有一条看「这台机器现在发不发得出去」。而 `release.js` 的第 3~5 步（改版本号 → commit + tag → push）**不可回退**，tag 一推版本号就被占住。此前第 0 步只判断 `.npmrc` 文件**存不存在**——「文件存在」与「凭证可用」是两件事，一个只写了 registry 换源配置的 `~/.npmrc` 就能骗过它，于是脚本走完 bump → commit → tag → push 才倒在 `npm publish`，留下第一节明令禁止的「版本已升、包没发」，而且下次再跑会跳到下一个版本号。第 0 步因此改为实探（`npm whoami` + 目标版本是否已被 registry 占用 + 本地 tag 是否已存在），改法见 `scripts/release-preflight.js`，自检见 `scripts/check-release.js`。自检里的用案例「只有 registry 配置的 `~/.npmrc`」就是为这个漏洞写的：它必须红。
 

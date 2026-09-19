@@ -102,15 +102,11 @@
 					case 4:
 						break;
 				}
-
-				console.log((this.lists));
 			},
 			OnColumnchange(e) {
-				console.log(e.detail);
 				var that = this;
 				this.value[e.detail.column] = e.detail.value;
 				this.now_ids[e.detail.column] = this.lists[e.detail.column][e.detail.value].id;
-				console.log(this.value, this.now_ids);
 				switch (e.detail.column) {
 					case 0:
 						that.now_provice_id = this.lists[0][e.detail.value].id;
@@ -132,8 +128,6 @@
 				this.$emit('columnchange');
 			},
 			onChange(e) {
-				console.log(e);
-
 				this.$emit('change', e);
 			}
 		}
