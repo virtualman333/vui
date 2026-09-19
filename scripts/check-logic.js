@@ -23,6 +23,10 @@
  *   3. **vui-pagination 的 current 只收了下界**：条数变少之后父组件手里的页码可能大于
  *      总页数，这时 `pages` 里没有任何一页等于 `current` —— 用户看到「一页都没选中」。
  *
+ * 第 26 轮又加了一个 `vui-upload`：预览时它把「全量列表」与「过滤掉空 url 之后的列表」
+ * 当成两个数组各按下标取，于是**点第 3 张会打开别的图**（越界时静默退回第一张）。
+ * 同样是静态检查完全隐形的那一类 —— 语法对、产物一致、props 登记齐全。
+ *
  * 做法
  * ----
  * 与 `check:markdown` 同一套：用 `@vue/compiler-sfc` 的 `parse()` 取 `<script>`（不手写
@@ -47,9 +51,25 @@ const root = path.resolve(__dirname, '..');
 const SLIDER = 'uni_modules/vui-slider/components/vui-slider/vui-slider.vue';
 const TIME = 'uni_modules/vui-time-picker/components/vui-time-picker/vui-time-picker.vue';
 const PAGINATION = 'uni_modules/vui-pagination/components/vui-pagination/vui-pagination.vue';
+const UPLOAD = 'uni_modules/vui-upload/components/vui-upload/vui-upload.vue';
+
+/**
+ * 被测组件：`路径 → 入口方法`。**这里是唯一登记处** —— 加载器自证直接遍历它。
+ *
+ * 为什么要有这张表：原先自证里手抄了一个三元素数组，于是「少抄一个组件」只是让循环
+ * 少跑一圈，**静默通过**。实测把 `vui-upload` 那条删掉，全部断言照样绿（V6 注入）。
+ * 所以下面除了「表里的每个都能加载出来」，还有一条**反向对账**：
+ * 文件里每声明一条 `const X = 'uni_modules/...'`，就必须出现在这张表里。
+ */
+const SUBJECTS = {
+	[SLIDER]: 'updateByClientX',
+	[TIME]: 'onChange',
+	[PAGINATION]: 'update',
+	[UPLOAD]: 'onPreview'
+};
 
 /** 断言条数下限：低于它说明加载器/枚举塌了，而不是「缺陷变少了」。 */
-const FLOOR = 20;
+const FLOOR = 30;
 
 console.log('\n[vui-uniapp] 纯函数型组件的行为测试（真的跑组件代码）');
 
@@ -326,6 +346,102 @@ test('pagination · 点省略号不触发任何事件', () => {
   eq(vm.__events.length, 0, '点省略号也发了事件 —— 宿主会收到一个假页码');
 });
 
+// ── vui-upload：预览列表与「被点的那一项」必须按同一套下标对齐 ──
+//
+// 这一组是第 26 轮加的。原实现把「全量列表」与「过滤掉空 url 之后的列表」当成两个
+// 数组各按下标取 —— 只要有一个条目拿不到 url，`.filter()` 就把后面的下标整体前移：
+// 点第 3 张会打开别的图（或越界退回第一张），**且不报错**。上面那些静态检查一条都
+// 看不见（语法对、产物一致、props 登记齐全），只有真的把方法跑起来才看得见。
+
+/** 要打桩的 `uni` API（`withUni` 逐个装上并记录入参）。 */
+const UNI_API = ['previewImage', 'chooseImage', 'uploadFile'];
+
+/** 装一份假的 `uni`，把三个 API 的入参记下来；跑完无论如何都还原。 */
+function withUni(fn) {
+  const calls = { previewImage: [], chooseImage: [], uploadFile: [] };
+  const saved = global.uni;
+  global.uni = {};
+  for (const api of UNI_API) {
+    global.uni[api] = (o) => {
+      calls[api].push(o);
+      // uploadFile 的返回值得能被 `.onProgressUpdate` 探测，否则组件里那句
+      // `typeof task.onProgressUpdate === 'function'` 会抛在 undefined 上
+      return api === 'uploadFile' ? {} : undefined;
+    };
+  }
+  try {
+    fn(calls);
+  } finally {
+    global.uni = saved;
+  }
+  return calls;
+}
+
+test('upload · 预览时「被点的那一张」按原始下标对齐（中间有空 url 也不许错位）', () => {
+  const list = [{ url: 'a.png' }, { url: '' }, { url: 'c.png' }];
+  const calls = withUni(() => mount(UPLOAD, { modelValue: list }).onPreview(2));
+  eq(calls.previewImage.length, 1, '没有调用 previewImage');
+  const arg = calls.previewImage[0];
+  eq(JSON.stringify(arg.urls), JSON.stringify(['a.png', 'c.png']), '空 url 没被筛掉');
+  eq(arg.current, 'c.png', '点第 3 张却打开的不是它 —— 过滤后的下标与原始下标错位了');
+});
+
+test('upload · 预览第一张时也不受中间空 url 影响', () => {
+  const list = [{ url: 'a.png' }, { url: '' }, { url: 'c.png' }];
+  const calls = withUni(() => mount(UPLOAD, { modelValue: list }).onPreview(0));
+  eq(calls.previewImage[0].current, 'a.png', '第一张对不上');
+});
+
+test('upload · 点的那一张自己就没有 url 时，退回第一张（刻意的兜底，不是错位）', () => {
+  const list = [{ url: 'a.png' }, { url: '' }, { url: 'c.png' }];
+  const calls = withUni(() => mount(UPLOAD, { modelValue: list }).onPreview(1));
+  eq(calls.previewImage[0].current, 'a.png', '无 url 的那一项没有被兜底');
+});
+
+test('upload · 全都没有 url 时不弹预览（而不是弹一个空列表）', () => {
+  const calls = withUni(() => mount(UPLOAD, { modelValue: [{ url: '' }, { path: '' }] }).onPreview(0));
+  eq(calls.previewImage.length, 0, '空的 url 列表也调了 previewImage');
+});
+
+test('upload · preview=false 时一次都不弹', () => {
+  const calls = withUni(() =>
+    mount(UPLOAD, { preview: false, modelValue: [{ url: 'a.png' }] }).onPreview(0)
+  );
+  eq(calls.previewImage.length, 0, 'preview=false 没被遵守');
+});
+
+test('upload · fileUrl 的兜底顺序是 url → path → 空串', () => {
+  const vm = mount(UPLOAD, {});
+  eq(vm.fileUrl({ url: 'u', path: 'p' }), 'u', '有 url 时不该用 path');
+  eq(vm.fileUrl({ path: 'p' }), 'p', '没有 url 时没退回 path');
+  eq(vm.fileUrl({}), '', '两者都没有时应当是空串（调用方靠它判空）');
+});
+
+test('upload · onRemove(i) 删掉的是第 i 项，且发的是 update:modelValue + change 两份', () => {
+  const vm = mount(UPLOAD, { modelValue: [{ url: 'a' }, { url: 'b' }, { url: 'c' }] });
+  vm.onRemove(1);
+  const next = vm.lastPayload('update:modelValue');
+  eq(JSON.stringify(next.map((f) => f.url)), JSON.stringify(['a', 'c']), '删错了一项');
+  const change = vm.lastPayload('change');
+  eq(JSON.stringify(next), JSON.stringify(change), 'change 与 update:modelValue 的载荷不一致');
+});
+
+test('upload · 已满时不再弹选择器（max 到了就不该让用户白选一次）', () => {
+  const full = withUni(() => mount(UPLOAD, { max: 2, modelValue: [{ url: 'a' }, { url: 'b' }] }).onChoose());
+  eq(full.chooseImage.length, 0, '已经到 max 了还弹了选择器');
+  const room = withUni(() => mount(UPLOAD, { max: 5, modelValue: [{ url: 'a' }] }).onChoose());
+  eq(room.chooseImage[0].count, 4, '剩余可选数量算错');
+});
+
+test('upload · 单次可选数量取 min(剩余, count)：count 比剩余大时听剩余的', () => {
+  // 夹紧的方向要挑对：`count` 必须**大于**剩余，否则 min() 两边相等，这条断言不具判别力
+  // （第一版用的 max=9/count=2，注入「不再夹紧」照样绿 —— 被负向验证当场抓出）。
+  const calls = withUni(() =>
+    mount(UPLOAD, { max: 3, count: 9, modelValue: [{ url: 'a' }] }).onChoose()
+  );
+  eq(calls.chooseImage[0].count, 2, 'count 比剩余大时应当听剩余的（否则一次就能选爆 max）');
+});
+
 // ── 收尾：条数下限 + 加载器自证 ──
 
 if (passed + failures.length < FLOOR) {
@@ -335,16 +451,30 @@ if (passed + failures.length < FLOOR) {
   });
 }
 
-// 加载器自证：三个组件必须都能加载出对应入口，否则上面的「通过」可能是在空集上绿的
-test('自证 · 三个组件的被测入口都真的加载出来了', () => {
-  for (const [rel, method] of [
-    [SLIDER, 'updateByClientX'],
-    [TIME, 'onChange'],
-    [PAGINATION, 'update'],
-  ]) {
+// 加载器自证：每个被测组件必须都能加载出对应入口，否则上面的「通过」可能是在空集上绿的。
+// 遍历的是 `SUBJECTS`（唯一登记处），并配一条**反向对账** —— 只遍历登记表时，
+// 「表里少了一条」只会让循环少跑一圈、静默通过（V6 注入实测红 0 条）。
+test('自证 · 每个登记组件的被测入口都真的加载出来了', () => {
+  const names = Object.keys(SUBJECTS);
+  ok(names.length >= 4, `SUBJECTS 只有 ${names.length} 条 —— 登记表塌了`);
+  for (const [rel, method] of Object.entries(SUBJECTS)) {
     const vm = mount(rel, {});
     ok(typeof vm[method] === 'function', `${rel} 上找不到 ${method}`);
   }
+});
+
+test('自证 · 声明了组件路径就必须登记进 SUBJECTS（反向对账，防「少列一个」静默通过）', () => {
+  // 从本文件**现算**路径常量，而不是再抄一份清单
+  const self = fs.readFileSync(__filename, 'utf8');
+  const declared = [...self.matchAll(/^const ([A-Z][A-Z0-9_]*) = '(uni_modules\/[^']+)';$/gm)].map((m) => ({
+    name: m[1],
+    rel: m[2]
+  }));
+  ok(declared.length >= 4, `只解析出 ${declared.length} 条路径常量 —— 解析面塌了，这条对账会变成空话`);
+  const missing = declared.filter((d) => !(d.rel in SUBJECTS)).map((d) => d.name);
+  eq(JSON.stringify(missing), '[]', `这些组件声明了路径却没进 SUBJECTS，加载器自证漏掉了它们：${missing.join(', ')}`);
+  const ghost = Object.keys(SUBJECTS).filter((rel) => !declared.some((d) => d.rel === rel));
+  eq(JSON.stringify(ghost), '[]', `SUBJECTS 里有指向不存在常量的条目：${ghost.join(', ')}`);
 });
 
 console.log(`\n[vui-uniapp] check:logic —— ${passed} / ${passed + failures.length} 条通过`);

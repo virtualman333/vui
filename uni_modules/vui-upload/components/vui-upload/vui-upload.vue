@@ -148,11 +148,20 @@ export default {
 		},
 		onPreview(index) {
 			if (!this.preview) return;
-			const urls = this.list.map((file) => this.fileUrl(file)).filter((url) => !!url);
-			if (urls.length === 0) return;
+			/* 逐项配对再筛空。
+			   不能分别造「全量列表」与「过滤后的 url 列表」两个数组再按下标取：只要有一个
+			   条目拿不到 url，`.filter()` 就会把**后面的下标整体前移**，`urls[index]`
+			   指向的已经不是用户点的那一张；越界时还会静默退回 `urls[0]` ——
+			   表现是「点第 3 张，打开的是别的图」，且不报错。 */
+			const slides = this.list
+				.map((file, i) => ({ url: this.fileUrl(file), at: i }))
+				.filter((s) => !!s.url);
+			if (slides.length === 0) return;
+			const hit = slides.findIndex((s) => s.at === index);
 			uni.previewImage({
-				urls: urls,
-				current: urls[index] || urls[0]
+				urls: slides.map((s) => s.url),
+				// 点的那一张自己也拿不到 url 时才退回第一张（这一条是刻意的兜底，不是下标错位）
+				current: hit === -1 ? slides[0].url : slides[hit].url
 			});
 		}
 	}
