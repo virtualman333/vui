@@ -1,13 +1,8 @@
 <template>
 	<view>
-		<picker mode="multiSelector" @columnchange="OnColumnchange" :value="value" range-key="name" :range="lists"
+		<picker mode="multiSelector" @columnchange="OnColumnchange" :value="sel" range-key="name" :range="lists"
 			@change="onChange">
-			<input v-if="level==3" class="vui-region-input" :disabled="true"
-				:value="lists[0][value[0]].name+'-'+lists[1][value[1]].name+'-'+lists[2][value[2]].name" />
-			<input v-if="level==2" class="vui-region-input" :disabled="true"
-				:value="lists[0][value[0]].name+'-'+lists[1][value[1]].name" />
-			<input v-if="level==1" class="vui-region-input" :disabled="true"
-				:value="lists[0][value[0]].name" />
+			<input class="vui-region-input" :disabled="true" :value="displayText" />
 		</picker>
 	</view>
 </template>
@@ -15,22 +10,31 @@
 	import city from './data/city.json'
 	import province from './data/province.json'
 	import county from './data/county.json'
+	import town from './data/town.json'
+
+	// 各层的下级表：第 0 层是省（数组），第 1~3 层都是「按父级 id 索引的字典」
+	// 写成行注释而非块注释：AGENTS.md §4 要求脚本里第一块 JSDoc 就是组件描述。
+	// （别把 JSDoc 起止符的字面量写进注释 —— 生成器与 check:rules 都用正则找第一块，
+	//   它们认不出"这是散文里的例子"，会把这段注释当成组件描述。）
+	const CHILD_TABLES = [null, city, county, town]
+
 	/**
 	 * 城市选择器
 	 * @description 用于选择中国城市地区 组件
 	 * @tutorial https://github.com/virtualman333/vui
-	 * @property {Number} level = [1：省|2：省市|3：省市区|4：省市区镇] 
-	 * @property {Array} value = [默认值] 
+	 * @property {Number} level = [1 / 2 / 3 / 4] 生效层级：1 省，2 省市，3 省市区，4 省市区镇（越界与非法值按 3）
+	 * @property {Array} value = [省下标, 市下标, 区下标, 镇下标] 各列初始选中的下标（缺项与越界一律按 0，不会报错）
 	 * @event {Function} change 选完一列并确认时触发，参数为 picker 的 change 事件对象
-	 * @event {Function} columnchange 滚动某一列时触发（无参数）—— 用于联动刷新下一列的可选项
+	 * @event {Function} columnchange 滚动某一列时触发，参数为当前各列选中下标数组
+	 * @event {Function} update:value 选中项变化时触发，参数为当前各列选中下标数组（不用 v-model 也能拿到）
 	 */
 	export default {
 		name: 'vuiRegionPicker',
-		emits: ['change', 'columnchange'],
+		emits: ['change', 'columnchange', 'update:value'],
 		props: {
 			value: {
 				type: Array,
-				default: [0,0,0]
+				default: [0, 0, 0, 0]
 			},
 			level: {
 				type: Number,
@@ -39,95 +43,89 @@
 		},
 		data() {
 			return {
-				lists: [
-					[],
-					[],
-					[]
-				],
-				now_ids: [0,0, 0],
-				now_provice_id: 0,
-				now_city_id: 0,
-				now_county_id: 0,
+				/** 当前各列的可选项 */
+				lists: [],
+				/** 各列当前选中的下标（**本地**状态，不再就地改写宿主传进来的数组） */
+				sel: []
 			};
 		},
 
 		computed: {
-
+			/** 生效层级：只认 1~4，其余（含字符串、越界、NaN）一律退回默认 3 */
+			levelInt() {
+				const n = parseInt(this.level, 10);
+				return n >= 1 && n <= 4 ? n : 3;
+			},
+			/** 选中的名字拼成一行 —— 旧实现在模板里按 level 各写一遍（三处），收敛到这里 */
+			displayText() {
+				return this.sel
+					.slice(0, this.levelInt)
+					.map((i, col) => {
+						const row = (this.lists[col] || [])[i];
+						return row ? row.name : '';
+					})
+					.filter(Boolean)
+					.join('-');
+			}
 		},
 		created() {
-			this.getData(0);
+			this.getData();
 		},
 		mounted() {
 
 		},
 		methods: {
-			getData(type) {
-				var that = this;
-
-				var list_province = [];
-				var list_city = [];
-				var list_county = [];
-				for (var i in province) {
-					list_province.push(province[i])
+			/** 第 depth 层在 parentId 下的下级列表；取不到一律给空数组，绝不返回 undefined */
+			childList(depth, parentId) {
+				if (depth === 0) return Array.isArray(province) ? province.slice() : [];
+				const table = CHILD_TABLES[depth];
+				const rows = table ? table[parentId] : null;
+				return Array.isArray(rows) ? rows.slice() : [];
+			},
+			/** 下标收敛：缺失 / 非数 / 负数 / 越界 / 小数 → 合法下标（越界退 0，不 deref undefined） */
+			clampIndex(rows, want) {
+				const n = Number(want);
+				return rows.length && Number.isFinite(n) && n >= 0 && n < rows.length ? Math.trunc(n) : 0;
+			},
+			/**
+			 * 重建每一列。
+			 *
+			 * `kept` 是「本轮之前已经选定的下标」（列滚动时用）；不给就用宿主的 `value`。
+			 * 旧实现在这里对 `undefined` 取 `.id`：宿主传 `[2]`（只想指定省）、传 `[]`、
+			 * 或下标越界（`[99,0,0]`）时会**在 created 里直接抛 TypeError**（整页白屏，
+			 * 报错还挂在组件的生命周期栈上）；`level=4` 时更是整块 switch 没有 case，
+			 * `lists` 停在 `[[],[],[]]` —— picker 三列全空，而文档承诺了「4：省市区镇」。
+			 */
+			getData(kept) {
+				const n = this.levelInt;
+				const source = kept || this.value || [];
+				const lists = [];
+				const sel = [];
+				let parentId = null;
+				for (let col = 0; col < n; col += 1) {
+					const rows = this.childList(col, parentId);
+					lists.push(rows);
+					const idx = this.clampIndex(rows, source[col]);
+					sel.push(idx);
+					parentId = rows.length ? rows[idx].id : null;
 				}
-				if (this.now_provice_id == 0) {
-					this.now_provice_id = province[this.value[0]].id
-				}
-				if (type == 0) {
-					this.now_city_id = city[this.now_provice_id][this.value[1]].id
-					this.now_county_id = county[this.now_city_id][this.value[2]].id
-				}
-				if (type == 1) {
-
-					this.now_county_id = county[this.now_city_id][0].id
-				}
-
-				for (var i in city[this.now_provice_id]) {
-					list_city.push(city[this.now_provice_id][i])
-				}
-				for (var i in county[this.now_city_id]) {
-					list_county.push(county[this.now_city_id][i])
-				}
-				var level_int = parseInt(this.level)
-				switch (level_int) {
-					case 1:
-						this.lists = [list_province]
-						break;
-					case 2:
-						this.lists = [list_province, list_city]
-						break;
-					case 3:
-						this.lists = [list_province, list_city, list_county]
-						break;
-					case 4:
-						break;
-				}
+				this.lists = lists;
+				this.sel = sel;
 			},
 			OnColumnchange(e) {
-				var that = this;
-				this.value[e.detail.column] = e.detail.value;
-				this.now_ids[e.detail.column] = this.lists[e.detail.column][e.detail.value].id;
-				switch (e.detail.column) {
-					case 0:
-						that.now_provice_id = this.lists[0][e.detail.value].id;
-						this.now_city_id = 0;
-						this.value[1] = 0;
-						this.value[2] = 0;
-						this.now_county_id = 0;
-						break;
-					case 1:
-						that.now_city_id = this.lists[1][e.detail.value].id;
-						this.now_county_id = 0;
-						this.value[2] = 0;
-						break;
-					case 2:
-						that.now_county_id = this.lists[2][e.detail.value].id;
-						break;
-				}
-				this.getData(e.detail.column);
-				this.$emit('columnchange');
+				const col = Number(e && e.detail && e.detail.column);
+				const idx = Number(e && e.detail && e.detail.value);
+				if (!(col >= 0) || !(idx >= 0)) return;
+				const kept = this.sel.slice();
+				kept[col] = idx;
+				// 本列之后的下级列回到第一项：换了省，原来的市/区已经不属于它了
+				for (let c = col + 1; c < kept.length; c += 1) kept[c] = 0;
+				this.getData(kept);
+				this.$emit('columnchange', this.sel.slice());
+				this.$emit('update:value', this.sel.slice());
 			},
 			onChange(e) {
+				this.$emit('update:value', this.sel.slice());
 				this.$emit('change', e);
 			}
 		}

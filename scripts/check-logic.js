@@ -43,6 +43,18 @@
  *   6. **vui-progress 的 `format` 只替换第一个占位符**：`replace('{value}', …)` 不是全局
  *      替换，`format="{value}%（{value} 项）"` 会把第二个 `{value}` 原样吐给用户。
  *
+ * 第 29 轮接进 `vui-region-picker`（四个层级）。它此前挂了两轮，卡点是加载器接不住
+ * JSON import（`import city from './data/city.json'` 在 `new Function` 里是 ESM 语法）。
+ * 加载器补上「默认导入 + JSON」之后当场跑出四件事：
+ *
+ *   7. **`level=4`（省市区镇）是文档承诺、代码里没有落点**：`case 4:` 空的，
+ *      `lists` 停在 `[[],[],[]]` → picker 三列全空；而 `town.json`（2980 个街道）
+ *      一直在包里、`docs/API.md` 也一直写着「4：省市区镇」。
+ *   8. **宿主导参不收敛就取 `.id`**（第 4 次同族）：`:value="[2]"`、`:value="[]"`、
+ *      越界 `[99,0,0]` 三种写法都会在 `created` 里抛 TypeError（整页白屏）。
+ *   9. `OnColumnchange` 里 `this.value[col] = idx` **就地改写宿主数组**（静默改父状态）。
+ *  10. 显示文本那段表达式在模板里按 level 各写一遍（三处）。
+ *
  * 做法
  * ----
  * 与 `check:markdown` 同一套：用 `@vue/compiler-sfc` 的 `parse()` 取 `<script>`（不手写
@@ -73,6 +85,7 @@ const COUNT = 'uni_modules/vui-count-to/components/vui-count-to/vui-count-to.vue
 const PROGRESS = 'uni_modules/vui-progress/components/vui-progress/vui-progress.vue';
 const TABS = 'uni_modules/vui-tabs/components/vui-tabs/vui-tabs.vue';
 const TYPING = 'uni_modules/vui-typing/components/vui-typing/vui-typing.vue';
+const REGION = 'uni_modules/vui-region-picker/components/vui-region-picker/vui-region-picker.vue';
 
 /**
  * 被测组件：`路径 → 入口`。**这里是唯一登记处** —— 加载器自证直接遍历它。
@@ -94,14 +107,17 @@ const SUBJECTS = {
 	[COUNT]: 'format',
 	[PROGRESS]: 'computed:text',
 	[TABS]: 'computed:currentIndex',
-	[TYPING]: 'computed:targetText'
+	[TYPING]: 'computed:targetText',
+	[REGION]: 'getData'
 };
 
 /**
  * 断言条数下限：低于它说明加载器/枚举塌了，而不是「缺陷变少了」。
- * 现网实测 67 条（登记 12 个组件）；留 7 条余量，只挡住「整片没跑」级别的塌陷。
+ * 现网实测 78 条（登记 10 个组件，第 29 轮把 vui-region-picker 接进来后从 67 → 78；
+ * 这里的计数发生在「条数下限」与两条自证之前，别把自证算进来）；留 8 条余量，
+ * 只挡住「整片没跑」级别的塌陷。
  */
-const FLOOR = 60;
+const FLOOR = 70;
 
 console.log('\n[vui-uniapp] 纯函数型组件的行为测试（真的跑组件代码）');
 
@@ -134,6 +150,16 @@ const pad2 = (n) => (n < 10 ? '0' + n : String(n));
 /**
  * 用 SFC 解析器取 `<script>` 块并求值，拿到组件选项对象。
  * 手写正则切 `<script>` 会被正文里的 `</script>`、注释里的标签骗过；解析器不会。
+ *
+ * 为什么额外支持 **JSON 默认导入**（第 29 轮加）
+ * -------------------------------------------
+ * `vui-region-picker` 用 `import city from './data/city.json'` 带四张数据表
+ * （省 / 市 / 区 / 街道，共 3361 条），`new Function` 求值时这是 ESM 语法，直接
+ * SyntaxError —— 于是「想测它」这件事被一句加载器报错拦住挂了整轮。现在把 JSON
+ * 默认导入就地内联成 `__json('<相对路径>')`，由读盘时解析（这样数据表**不进**本文件）。
+ *
+ * **接不住的导入一律抛错，不静默跳过**（本文件的总原则）：报错要说出是哪个 import，
+ * 而不是让组件「加载不出来」变成一条看不懂的 TypeError。
  */
 function loadOptions(rel) {
   const raw = fs.readFileSync(path.join(root, rel), 'utf8');
@@ -141,11 +167,24 @@ function loadOptions(rel) {
   if (errors && errors.length) throw new Error(`${rel} SFC 解析失败：${errors[0].message}`);
   const script = descriptor.script ? descriptor.script.content : '';
   if (!script) throw new Error(`${rel} 里没有 <script> 块`);
-  if (!/^export default\b/m.test(script)) throw new Error(`${rel} 的 <script> 里没有 export default`);
-  const code = script.replace(/^export default\b/m, 'module.exports =');
+  // 允许整块缩进（vui-region-picker 的 `<script>` 内容就是制表符缩进的）
+  if (!/^[ \t]*export default\b/m.test(script)) throw new Error(`${rel} 的 <script> 里没有 export default`);
+  let code = script.replace(/^[ \t]*export default\b/m, 'module.exports =');
+  code = code.replace(
+    /^[ \t]*import\s+([A-Za-z_$][A-Za-z0-9_$]*)\s+from\s+(['"])(.+?)\2[ \t]*;?[ \t]*$/gm,
+    (_m, name, _q, spec) => `const ${name} = __json(${JSON.stringify(spec)});`
+  );
+  const left = code.match(/^[ \t]*import\b.*$/m);
+  if (left) {
+    throw new Error(
+      `${rel} 还有接不住的 import：${left[0].trim()} —— 加载器只支持「默认导入 + JSON 数据表」`
+    );
+  }
   const mod = { exports: {} };
   // eslint-disable-next-line no-new-func
-  new Function('module', 'exports', code)(mod, mod.exports);
+  new Function('module', 'exports', '__json', code)(mod, mod.exports, (spec) =>
+    JSON.parse(fs.readFileSync(path.resolve(path.dirname(path.join(root, rel)), spec), 'utf8'))
+  );
   if (!mod.exports || typeof mod.exports !== 'object') throw new Error(`${rel} 没导出组件选项对象`);
   return mod.exports;
 }
@@ -156,8 +195,11 @@ function loadOptions(rel) {
  * ① methods 要在 `data()` 之前 —— 组件的 `data()` 会调 `this.someMethod()`
  *    （vui-calendar 的 `data()` 就调了 `this.parseDate`）。
  * ② overrides 放最后，才能盖住 props 与 data 两处的默认值（`rect` 是 data）。
+ * ③ `runCreated`（第 29 轮加，默认 false 保持既有调用点不变）：`vui-region-picker` 的
+ *    初始化在 `created()` 里（`this.getData()`），那是它的**主路径**，不跑就等于没测。
+ *    默认关掉是因为别的组件 `created` 里是副作用，跑来只会把日志弄脏。
  */
-function mount(rel, overrides) {
+function mount(rel, overrides, runCreated) {
   const options = loadOptions(rel);
   const vm = { __events: [] };
   for (const [k, fn] of Object.entries(options.methods || {})) vm[k] = fn;
@@ -178,6 +220,7 @@ function mount(rel, overrides) {
     const list = vm.pickEvent(name);
     return list.length ? list[list.length - 1].args[0] : undefined;
   };
+  if (runCreated && typeof options.created === 'function') options.created.call(vm);
   return vm;
 }
 
@@ -812,6 +855,113 @@ test('对账 · 模板里也不许拿 index 直接与 prop 比（vui-tabs 的第
   const old = tmpl.replace("index === currentIndex", "index === modelValue");
   eq(JSON.stringify(templateIndexCompares(TABS, old)), JSON.stringify(['modelValue']),
     '判据抓不到旧写法 —— 这条对账是空话');
+});
+
+// ── vui-region-picker：四个层级（省 / 省市 / 省市区 / 省市区镇） ──────────────
+//
+// 这个组件整整两轮没能进这份检查，卡点是「加载器接不住 JSON import」—— 本轮把加载器
+// 补上（见 loadOptions 的注释），顺手把它的四层联动真跑起来，因为读代码看不出下面这些：
+//
+//   ① `level=4`（省市区镇）从第 1 天起就写在 JSDoc 与 `docs/API.md` 里，`town.json`
+//      （2980 个街道）也一直在包里，而代码里 `case 4:` 是**空的** —— 实测 `lists` 停在
+//      `[[],[],[]]`，picker 三列全空、一个字都显示不出来。
+//   ② 同一族的另一条老路：宿主导参不收敛就取 `.id`。`:value="[2]"`（只想指定省）、
+//      `:value="[]"`、下标越界 `[99,0,0]` 三种写法都会**在 created 里抛 TypeError**
+//      —— 那是整页白屏，报错还挂在组件的生命周期栈上。
+//   ③ 列滚动时 `this.value[col] = idx` 直接就地改写宿主传进来的数组：父组件的状态被
+//      改了，却没有任何 emit 通知它（静默改父状态，第 3 轮修过的同一个形状）。
+//   ④ 显示文本那段表达式在模板里按 level 各写一遍（三处），加第 4 层就地漏一处。
+//
+// 判据一律锚在**真实数据**上（北京市/市辖区/东城区/东华门街道这种从头就能手算的链路），
+// 不用「非空」这种恒真的话。
+
+const region = (props) => mount(REGION, props, true);
+
+test('region-picker · level 1/2/3 的列数与旧实现一致（不回归）', () => {
+  eq(region({ level: 1 }).lists.length, 1, 'level=1 应该是 1 列');
+  eq(region({ level: 2 }).lists.length, 2, 'level=2 应该是 2 列');
+  const three = region({ level: 3 });
+  eq(three.lists.length, 3, 'level=3 应该是 3 列');
+  eq(three.lists[0].length, 31, '省这一列应该是 31 个');
+  eq(three.displayText, '北京市-市辖区-东城区', '三级联动的显示文本不对');
+});
+
+test('region-picker · level=4 真的产出第 4 列（文档承诺的「省市区镇」有落点）', () => {
+  const vm = region({ level: 4 });
+  eq(vm.lists.length, 4, `level=4 只给了 ${vm.lists.length} 列 —— 文档承诺的「省市区镇」没有落点`);
+  eq(vm.lists[3].length, 17, '第 4 列（街道）不是东城区的 17 个街道 —— town.json 没被接进来');
+  eq(vm.displayText, '北京市-市辖区-东城区-东华门街道', '四级联动的显示文本不对');
+});
+
+test('region-picker · 换省之后下面三级跟着换，且都回到第一项', () => {
+  // ⚠ 起点必须让**下级列非零**：[2,1,1,1] = 河北省-唐山市-路南区-友谊街道（真实数据里
+  //   三级下标 1 都成立）。从全 0 出发时，「归零」与「不归零」算出来完全一样 ——
+  //   断言会恒真。负向验证实测过：把 `kept[c] = 0` 改成 `kept[c] = kept[c]`，旧写法照样绿，
+  //   缺陷就这么留在代码里（这才是「不会响的检查」的典型形状）。
+  const vm = region({ level: 4, value: [2, 1, 1, 1] });
+  eq(vm.sel.join(','), '2,1,1,1', '起点这条链路在真实数据里不存在 —— 测试前提不成立，先修这条');
+  vm.OnColumnchange({ detail: { column: 0, value: 10 } }); // 浙江省
+  eq(vm.sel[0], 10, '第一列没有跟着滚');
+  eq(vm.sel.slice(1).join(','), '0,0,0', '换省后下面三级没有回到第一项');
+  eq(vm.lists[1].length, 11, '浙江省的市数量不对（11 个地级市）');
+  ok(vm.displayText.indexOf('浙江省-杭州市') === 0, `显示文本没跟着换：${vm.displayText}`);
+});
+
+test('region-picker · 换市之后区/镇跟着换（起点同样要让下级非零）', () => {
+  // 石家庄市有 25 个区 —— 不归零时下标 1 仍然合法，所以这条断言对「归零」是**真的有判据**的
+  const vm = region({ level: 4, value: [2, 1, 1, 1] }); // 河北省-唐山市-路南区-友谊街道
+  vm.OnColumnchange({ detail: { column: 1, value: 0 } }); // 换到石家庄市
+  eq(vm.sel.slice(0, 2).join(','), '2,0', '省 / 市没有跟着滚');
+  eq(vm.sel[0], 2, '换市不该动到省（只有下级该归零）');
+  eq(vm.sel.slice(2).join(','), '0,0', '换市后「区」「镇」没有回到第一项');
+  ok(vm.displayText.indexOf('河北省-石家庄市') === 0, `显示文本没跟着换：${vm.displayText}`);
+});
+
+test('region-picker · 宿主传短数组不再白屏（旧实现在 created 里抛 TypeError）', () => {
+  // 三种都是正常写法：只想指定省、绑定还没加载完的空数组、少给一级
+  const short = region({ value: [2] });
+  eq(short.sel[0], 2, 'value=[2] 时第一列没有选中 2');
+  eq(short.lists[1].length, 11, 'value=[2]（河北省）时市那一列不对');
+  eq(region({ value: [] }).sel.join(','), '0,0,0', 'value=[] 时下标没有全部退回 0');
+  // 河北省（第 3 个省）的第二个市 —— 同一个 `[省, 市]` 写法在「北京」那种只有一个市辖区
+  // 的省上会夹回 0，所以期望值必须挑一条省市数都够的链路来写
+  eq(region({ value: [2, 1] }).sel.join(','), '2,1,0', 'value=[2,1] 时第三列没有退回 0');
+});
+
+test('region-picker · 越界下标被夹回 0，不 deref undefined', () => {
+  // ⚠ 边界必须含「刚好等于长度」那一格（`[31, 0, 0]` 的 31 = 省数、`[0, 1, 0]` 的 1 = 北京市的市数）。
+  //   只测 99 这种「远在天边」的值时，把上界从 `n < rows.length` 放宽成 `n <= rows.length`
+  //   照样绿 —— 负向验证实测：那一格才是真正会 deref undefined 的位置。
+  for (const v of [[99, 0, 0], [0, 99, 0], [0, 0, 99], [-1, 0, 0], [31, 0, 0], [0, 1, 0]]) {
+    const vm = region({ value: v });
+    eq(vm.sel.join(','), '0,0,0', `value=${JSON.stringify(v)} 的越界下标没有被夹回`);
+  }
+  eq(region({ value: [99, 99, 99] }).displayText, '北京市-市辖区-东城区', '越界时的显示文本不对');
+});
+
+test('region-picker · 不再就地改写宿主传进来的数组', () => {
+  const host = [0, 0, 0];
+  const vm = mount(REGION, { value: host }, true);
+  vm.OnColumnchange({ detail: { column: 0, value: 3 } }); // 山西省
+  eq(host.join(','), '0,0,0', '宿主的数组被就地改写了 —— 这是静默改父组件状态');
+  ok(vm.displayText.indexOf('山西省') === 0, `选中项没跟着换：${vm.displayText}`);
+});
+
+test('region-picker · 选中项变化会发 update:value（宿主不必去读被改写过的 prop）', () => {
+  const vm = region({});
+  vm.OnColumnchange({ detail: { column: 0, value: 1 } }); // 天津市
+  const payload = vm.lastPayload('update:value');
+  ok(Array.isArray(payload), 'update:value 没发出数组');
+  eq(payload.join(','), '1,0,0', 'update:value 的载荷不对');
+  vm.onChange({ detail: { value: [1, 0, 0] } });
+  eq(vm.lastPayload('update:value').join(','), '1,0,0', '确认时没有带上同一份选中项');
+  eq(vm.pickEvent('change').length, 1, 'change 事件没有发出');
+});
+
+test('region-picker · level 传字符串 / 非法值一律收敛，不再产出空列', () => {
+  eq(region({ level: '4' }).lists.length, 4, "level='4' 应当被收敛成 4");
+  eq(region({ level: 9 }).lists.length, 3, '越界的 level 应当退回默认 3');
+  eq(region({ level: 0 }).lists.length, 3, 'level=0 应当退回默认 3');
 });
 
 // ── 收尾：条数下限 + 加载器自证 ──

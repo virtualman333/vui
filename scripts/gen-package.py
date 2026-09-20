@@ -155,7 +155,10 @@ def parse_jsdoc(t):
     for pm in re.finditer(r'@property\s*\{[^}]*\}\s*([A-Za-z_$][\w$]*)\s*(.*)', doc):
         props[pm.group(1)] = pm.group(2).strip()
     events = []
-    for em in re.finditer(r'@event\s*\{[^}]*\}\s*([A-Za-z_$][\w$-]*)\s*(.*)', doc):
+    # ⚠ 事件名字符类必须含 `:`（与 gen-docs.py 逐字一致）：`update:modelValue` 这类
+    #   「带修饰的事件名」旧版被切成名字 `update` + 说明 `:modelValue …`。下方写
+    #   `%sEmits` 时那句「不是合法标识符就加引号」的判断就是为它准备的，但从未生效过。
+    for em in re.finditer(r'@event\s*\{[^}]*\}\s*([A-Za-z_$][\w$:-]*)\s*(.*)', doc):
         events.append((em.group(1), em.group(2).strip()))
     return desc, props, events
 

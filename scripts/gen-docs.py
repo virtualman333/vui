@@ -163,7 +163,12 @@ def parse_jsdoc(t):
     for pm in re.finditer(r'@property\s*\{[^}]*\}\s*([A-Za-z_$][\w$]*)\s*(.*)', doc):
         props[pm.group(1)] = pm.group(2).strip()
     events = []
-    for em in re.finditer(r'@event\s*\{[^}]*\}\s*([A-Za-z_$][\w$-]*)\s*(.*)', doc):
+    # ⚠ 事件名的字符类必须含 `:` —— `update:modelValue` / `update:value` 是本仓库
+    #   9 个组件的写法。旧字符类 [\w$-] 不含 `:`，于是 `@event {Function} update:modelValue 说明`
+    #   被切成 名字 `update` + 说明 `:modelValue 说明`：API.md 印的事件名叫 `update`，
+    #   宿主按 `@update:modelValue` 写处理器时文档查不到、类型也对不上，
+    #   而 gen-package.py 里那句「名字不是合法标识符就加引号」的兜底**一次都没被走到**。
+    for em in re.finditer(r'@event\s*\{[^}]*\}\s*([A-Za-z_$][\w$:-]*)\s*(.*)', doc):
         events.append((em.group(1), em.group(2).strip()))
     slots = []
     for sm_ in re.finditer(SLOT_RE, doc):

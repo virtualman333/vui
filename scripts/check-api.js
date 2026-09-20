@@ -12,7 +12,7 @@
  * 问一句「谁在扛这句话」—— 在这之前，答案是**没有人**。`check-gen` 只是把生成器
  * 重跑一遍、逐字节比对：两边跑的是**同一份有 bug 的解析器**，产物再错也自洽。
  *
- * 两个当场被抓到的实例
+ * 三个当场被抓到的实例
  * --------------------
  * ① **生成器静默丢 prop**：`parse_props` 按顶层逗号切段，于是「prop 上面单独一行写
  *    `// 说明`」会让那行注释跟着下一个 prop 进同一段，旧代码 `if seg.startswith('//'):
@@ -23,8 +23,14 @@
  *    `gen-docs.py` 从第 1 天起就支持 `@slot`、也支持渲染「插槽」小节，于是
  *    `docs/API.md` 里 0 个插槽小节 —— 而 README 明写「完整 API（属性 / 事件 / 插槽）
  *    见 docs/API.md」。用户没法从文档知道哪个组件能插、插进去叫什么名字。
+ * ③ **带修饰的事件名被切成两半**：`@event` 的名字字符类不含 `:`，于是
+ *    `update:modelValue` / `update:value` 被读成 名字 `update` + 说明 `:modelValue …`。
+ *    9 个组件受了影响：`docs/API.md` 与 `types/index.d.ts` 都印着事件名 `update`，
+ *    宿主按 `@update:modelValue` 写处理器时文档里查不到、类型也对不上。
+ *    而 `gen-package.py` 里那句「名字不是合法标识符就加引号」的兜底**一次都没被走到** ——
+ *    它是为这种名字准备的，却因为上游解析拿不到它们而永远沉默。
  *
- * 判据（四组，全部两向）
+ * 判据（四组，A–C 两向）
  * ----------------------
  *   A `props-no-dead`    声明的 prop，全库剥注释的代码里必须有人读 —— 否则文档/类型/
  *                        API.md 都承诺了它，用户设了没反应（实测 `vui-chat-input.stopText`）
@@ -37,7 +43,7 @@
  *   D `artifact-*`       **产物 ↔ 源码**：`types/index.d.ts` 的 `<Pascal>Props` 字段集合、
  *                        `docs/API.md` 的属性表行集合与插槽表行集合，必须与源码**逐位相等**。
  *                        这一组是真正拦住「生成器丢 prop」的那一道 —— 它不重跑生成器，
- *                        而是直接拿源码当基准问产物。
+ *                        而是直接拿源码当基准问产物。事件表是**单向 + 指纹**（见 D-3 注释）。
  *
  * A 组的诚实说明
  * --------------
@@ -62,6 +68,7 @@ const fs = require('fs');
 const path = require('path');
 const { listComponents } = require('./lib/components');
 const {
+  eventNames,
   firstJsDoc,
   markdownTables,
   propertyNames,
@@ -78,7 +85,7 @@ const root = path.resolve(__dirname, '..');
 const API_MD = path.join(root, 'docs', 'API.md');
 const DTS = path.join(root, 'types', 'index.d.ts');
 
-console.log('\n[vui-uniapp] props / 插槽契约对账（API.md · types · 源码三面）');
+console.log('\n[vui-uniapp] props / 事件 / 插槽契约对账（API.md · types · 源码三面）');
 
 /**
  * 模板里 name 不是字符串字面量的插槽（`<slot :name="column.key">`）—— 静态对账抓不到名字，
@@ -101,7 +108,7 @@ const DYNAMIC_SLOTS = {
 };
 
 /** 扫描面下限：低于它说明解析塌了，集合相等的断言会在缩小的集合上判绿 */
-const FLOORS = { components: 40, props: 200, propertyDocs: 200, slots: 20, slotDocs: 20 };
+const FLOORS = { components: 40, props: 200, propertyDocs: 200, eventDocs: 70, slots: 20, slotDocs: 20 };
 
 const groups = new Map();
 function addRule(id, name, why, fix) {
@@ -176,6 +183,16 @@ const RULES = {
       '否则文档会安静地错下去',
     '修 scripts/gen-docs.py 的 SLOT_RE / 渲染，再跑 npm run gen'
   ),
+  'artifact-events': addRule(
+    'artifact-events',
+    'docs/API.md 的事件表必须与源码 @event 逐位相等（名字不许被从冒号处切断）',
+    '@event 的名字字符类一度不含 `:`，于是 `@event {Function} update:modelValue 值变化时触发`' +
+      '被切成 名字 `update` + 说明 `:modelValue 值变化时触发`：API.md 与 types/index.d.ts ' +
+      '里那个事件就叫 `update`，宿主按 `@update:modelValue` 写处理器时文档里查不到、' +
+      '类型也对不上。而 check:gen 只是把生成器重跑一遍（产物再错也自洽）、' +
+      '事件名此前又不在对账范围内，所以它一路全绿地错到了 9 个组件',
+    '修 scripts/gen-docs.py / gen-package.py 的 @event 正则（名字里要允许 `:`），再跑 npm run gen'
+  ),
   'artifact-missing': addRule(
     'artifact-missing',
     '每个组件都必须能在 types 与 docs/API.md 里找到自己的段',
@@ -240,6 +257,18 @@ function selfTest() {
     const t = markdownTables('| 属性 | 类型 |\n| --- | --- |\n| `a` | `string` |\n')[0];
     return [t.header, t.rows];
   })(), [['属性', '类型'], [['a', 'string']]]);
+  // ⑧ @event 名里的 `:` —— `update:modelValue` 是一整个名字，不是「update + 说明」。
+  //    这条自证就是为「字符类漏了 `:`」那个缺陷钉的：把 `:` 从字符类里去掉，它立刻红。
+  check(
+    'eventNames · update:modelValue 是一个完整事件名',
+    eventNames('@event {Function} update:modelValue 值变化时触发（v-model）'),
+    ['update:modelValue']
+  );
+  check(
+    'eventNames · 普通事件名与带修饰事件名混排（顺序即文档顺序）',
+    eventNames('@event {Function} change 改变时触发\n@event {Function} update:value 选中项变化'),
+    ['change', 'update:value']
+  );
 
   let bad = 0;
   console.log('\n  解析器自证（每次运行都跑，构造输入当场验）');
@@ -270,6 +299,7 @@ for (const e of entries) {
 
   const props = propsOf(script);
   const jprops = propertyNames(doc);
+  const jevents = eventNames(doc);
   const jslots = slotDocs(doc);
   const { literal, dynamic } = templateSlots(tpl);
 
@@ -299,7 +329,7 @@ for (const e of entries) {
     }
   }
 
-  facts.push({ id: e.id, raw, props, jprops, jslots, tplSlots, literal, dynamic });
+  facts.push({ id: e.id, raw, props, jprops, jevents, jslots, tplSlots, literal, dynamic });
   LIB += '\n' + stripComments(withoutPropsBlock(raw));
 }
 
@@ -413,9 +443,26 @@ function dtsPropNames(pascal) {
   return out;
 }
 
+/**
+ * d.ts 里某个 `<Pascal>Emits` 接口的事件名（顺序即生成顺序）；没有这个接口返回 null。
+ *
+ * 带 `:` 的名字在 d.ts 里是**带引号**的（`'update:modelValue': (...args) => void;`）——
+ * gen-package.py 里那句「不是合法标识符就加引号」的判断就是为它写的，
+ * 解析这一头必须跟着认，否则断言会在带引号的名字上假红。
+ */
+function dtsEventNames(pascal) {
+  const m = new RegExp('export interface ' + pascal + 'Emits \\{([\\s\\S]*?)\\n\\}').exec(dts);
+  if (!m) return null;
+  const out = [];
+  for (const x of m[1].matchAll(/^\t(?:'([^']+)'|([A-Za-z_$][\w$]*))\??:/gm)) out.push(x[1] || x[2]);
+  return out;
+}
+
 let artifactPropsChecked = 0;
 let artifactApiPropsChecked = 0;
 let artifactSlotsChecked = 0;
+let artifactEventsChecked = 0;
+let artifactDtsEventsChecked = 0;
 
 for (const f of facts) {
   const pascal = pascalOf(f.id);
@@ -432,6 +479,31 @@ for (const f of facts) {
         `types/index.d.ts · ${pascal}Props`,
         `与源码 props 不一致：产物 [${fromDts.join(', ')}] / 源码 [${f.props.join(', ')}]` +
           renderDelta(fromDts, f.props)
+      );
+    }
+  }
+
+  // D-1b types/index.d.ts 的 `<Pascal>Emits` —— 事件名在被切断这件事上，d.ts 与 API.md
+  // 是**两条独立的路径**（gen-package.py / gen-docs.py 各一份解析器），只查一边的话，
+  // 单独改坏 gen-package.py 就会漏过去。
+  const evFromDts = dtsEventNames(pascal);
+  if (evFromDts === null) {
+    if (f.jevents.length) {
+      fail(
+        'artifact-missing',
+        f.id,
+        `源码登记了 ${f.jevents.length} 个 @event，但 types/index.d.ts 里没有 ${pascal}Emits 接口`
+      );
+    }
+  } else {
+    artifactDtsEventsChecked += evFromDts.length;
+    const lostInDts = f.jevents.filter((n) => !evFromDts.includes(n));
+    if (lostInDts.length) {
+      fail(
+        'artifact-events',
+        `types/index.d.ts · ${pascal}Emits`,
+        `@event 写了 [${lostInDts.join(', ')}]，产物接口里找不到` +
+          `（接口里是 [${evFromDts.join(', ')}]）—— 生成器把事件名切断了？`
       );
     }
   }
@@ -488,6 +560,42 @@ for (const f of facts) {
       );
     }
   }
+
+  // D-3 docs/API.md 的事件表
+  //
+  // 只做**单向 + 指纹**两类断言，不重演生成器的合并规则（JSDoc ∪ (emits \ update:*)）：
+  //   · 单向：源码 `@event` 写的每个名字都必须在该组件事件表的名字列里。名字被从冒号处
+  //     切断时（`update:modelValue` → `update`），这条立刻红。
+  //   · 指纹：说明列不许以 `:` 开头 —— 那正是「名字被切断、说明掉了头」的固定形状。
+  // 没查的那一面（产物多出一行）由 check:rules 的 emits ↔ $emit 双向对账覆盖。
+  const eventTable = tables.find((t) => t.header[0] === '事件名');
+  if (f.jevents.length) {
+    if (!eventTable) {
+      fail('artifact-missing', f.id, `源码登记了 ${f.jevents.length} 个 @event，但 docs/API.md 里没有事件表`);
+    } else {
+      artifactEventsChecked += eventTable.rows.length;
+      const names = new Set(eventTable.rows.map((r) => r[0]));
+      const lost = f.jevents.filter((n) => !names.has(n));
+      if (lost.length) {
+        fail(
+          'artifact-events',
+          `docs/API.md · ${f.id} 事件表`,
+          `@event 写了 [${lost.join(', ')}]，产物事件表里找不到这些名字` +
+            `（表格里是 [${[...names].join(', ')}]）—— 生成器把事件名切断了？`
+        );
+      }
+      for (const row of eventTable.rows) {
+        if (row[1].startsWith(':')) {
+          fail(
+            'artifact-events',
+            `docs/API.md · ${f.id} 事件 ${row[0]}`,
+            `说明以 ":" 开头（"${row[1].slice(0, 40)}"）—— 事件名被从冒号处切断的指纹：` +
+              `真正的事件名应是 "${row[0]}${row[1].split(/\s/)[0]}"`
+          );
+        }
+      }
+    }
+  }
 }
 
 /** 集合差的可读表述：只在数量不同或顺序不同时补一句，避免噪音 */
@@ -507,6 +615,7 @@ function renderDelta(got, want) {
 
 const totalProps = facts.reduce((n, f) => n + f.props.length, 0);
 const totalJProps = facts.reduce((n, f) => n + f.jprops.length, 0);
+const totalJEvents = facts.reduce((n, f) => n + f.jevents.length, 0);
 const totalSlots = facts.reduce((n, f) => n + f.tplSlots.size, 0);
 const totalJSlots = facts.reduce((n, f) => n + f.jslots.size, 0);
 const dynamicCount = facts.reduce((n, f) => n + f.dynamic.length, 0);
@@ -515,17 +624,19 @@ const scan = [
   ['组件', facts.length, FLOORS.components],
   ['props 声明', totalProps, FLOORS.props],
   ['@property 文档', totalJProps, FLOORS.propertyDocs],
+  ['@event 文档', totalJEvents, FLOORS.eventDocs],
   ['模板插槽', totalSlots, FLOORS.slots],
   ['@slot 登记', totalJSlots, FLOORS.slotDocs],
 ];
 
 console.log(
   `  扫描面: 组件 ${facts.length}   props ${totalProps}（去重后检查 ${deadChecked} 条）   ` +
-    `@property ${totalJProps}   模板插槽 ${totalSlots}（其中动态 ${dynamicCount}）   @slot ${totalJSlots}`
+    `@property ${totalJProps}   @event ${totalJEvents}   ` +
+    `模板插槽 ${totalSlots}（其中动态 ${dynamicCount}）   @slot ${totalJSlots}`
 );
 console.log(
-  `  产物对账: types/index.d.ts 字段 ${artifactPropsChecked}   ` +
-    `docs/API.md 属性行 ${artifactApiPropsChecked} / 插槽行 ${artifactSlotsChecked}`
+  `  产物对账: types/index.d.ts 字段 ${artifactPropsChecked} / 事件 ${artifactDtsEventsChecked}   ` +
+    `docs/API.md 属性行 ${artifactApiPropsChecked} / 事件行 ${artifactEventsChecked} / 插槽行 ${artifactSlotsChecked}`
 );
 
 /* 动态插槽名静态抓不到，全靠这张登记表兜着 —— 打出来，别让它隐形 */
@@ -566,4 +677,4 @@ if (bad) {
   process.exit(1);
 }
 
-console.log(`\n  ${facts.length} 个组件的 props / 插槽契约与产物一致。\n`);
+console.log(`\n  ${facts.length} 个组件的 props / 事件 / 插槽契约与产物一致。\n`);

@@ -200,8 +200,8 @@ export interface VuiChatInputProps {
 
 /** AI 对话输入框 事件 */
 export interface VuiChatInputEmits {
-	/** :modelValue 输入内容变化 */
-	update: (...args: any[]) => void;
+	/** 输入内容变化 */
+	'update:modelValue': (...args: any[]) => void;
 	/** 点击发送时触发，参数为当前文本 */
 	send: (...args: any[]) => void;
 	/** 生成中点击停止时触发 */
@@ -426,8 +426,8 @@ export interface VuiFeedbackProps {
 
 /** AI 回答评价 事件 */
 export interface VuiFeedbackEmits {
-	/** :modelValue 评价变化 */
-	update: (...args: any[]) => void;
+	/** 评价变化 */
+	'update:modelValue': (...args: any[]) => void;
 	/** 评价变化时触发，参数为当前值 */
 	change: (...args: any[]) => void;
 	/** 选中赞同 */
@@ -556,8 +556,8 @@ export interface VuiInputProps {
 
 /** Input 输入框 事件 */
 export interface VuiInputEmits {
-	/** :modelValue 值变化时触发（v-model） */
-	update: (...args: any[]) => void;
+	/** 值变化时触发（v-model） */
+	'update:modelValue': (...args: any[]) => void;
 	/** 值变化时触发（兼容写法） */
 	input: (...args: any[]) => void;
 	/** 失焦时触发，参数为当前值 */
@@ -694,8 +694,8 @@ export interface VuiModelSelectProps {
 
 /** 模型选择 事件 */
 export interface VuiModelSelectEmits {
-	/** :modelValue 选中值变化 */
-	update: (...args: any[]) => void;
+	/** 选中值变化 */
+	'update:modelValue': (...args: any[]) => void;
 	/** 选中值变化时触发，参数为选中项对象 */
 	change: (...args: any[]) => void;
 }
@@ -832,8 +832,8 @@ export interface VuiPromptCardProps {
 export interface VuiPromptCardEmits {
 	/** 点击卡片时触发 */
 	click: (...args: any[]) => void;
-	/** :modelValue 选中状态变化 */
-	update: (...args: any[]) => void;
+	/** 选中状态变化 */
+	'update:modelValue': (...args: any[]) => void;
 	/** 选中状态变化时触发，参数为当前是否选中 */
 	change: (...args: any[]) => void;
 }
@@ -870,9 +870,9 @@ export const VuiRadio: DefineComponent<VuiRadioProps>;
 
 /** 城市选择器 */
 export interface VuiRegionPickerProps {
-	/** = [默认值] */
+	/** = [省下标, 市下标, 区下标, 镇下标] 各列初始选中的下标（缺项与越界一律按 0，不会报错） */
 	value?: any[];
-	/** = [1：省|2：省市|3：省市区|4：省市区镇] */
+	/** = [1 / 2 / 3 / 4] 生效层级：1 省，2 省市，3 省市区，4 省市区镇（越界与非法值按 3） */
 	level?: number;
 }
 
@@ -880,8 +880,10 @@ export interface VuiRegionPickerProps {
 export interface VuiRegionPickerEmits {
 	/** 选完一列并确认时触发，参数为 picker 的 change 事件对象 */
 	change: (...args: any[]) => void;
-	/** 滚动某一列时触发（无参数）—— 用于联动刷新下一列的可选项 */
+	/** 滚动某一列时触发，参数为当前各列选中下标数组 */
 	columnchange: (...args: any[]) => void;
+	/** 选中项变化时触发，参数为当前各列选中下标数组（不用 v-model 也能拿到） */
+	'update:value': (...args: any[]) => void;
 }
 
 export const VuiRegionPicker: DefineComponent<VuiRegionPickerProps>;
@@ -1024,8 +1026,8 @@ export interface VuiSwitchProps {
 
 /** Switch 开关 事件 */
 export interface VuiSwitchEmits {
-	/** :modelValue 状态变化时触发（v-model） */
-	update: (...args: any[]) => void;
+	/** 状态变化时触发（v-model） */
+	'update:modelValue': (...args: any[]) => void;
 	/** 状态变化时触发 */
 	change: (...args: any[]) => void;
 }
@@ -1128,8 +1130,8 @@ export interface VuiThinkingProps {
 
 /** AI 推理过程展示 事件 */
 export interface VuiThinkingEmits {
-	/** :modelValue 展开状态变化 */
-	update: (...args: any[]) => void;
+	/** 展开状态变化 */
+	'update:modelValue': (...args: any[]) => void;
 	/** 展开状态变化时触发，参数为当前是否展开 */
 	toggle: (...args: any[]) => void;
 }
@@ -1268,8 +1270,8 @@ export interface VuiVoiceInputProps {
 
 /** 语音输入 事件 */
 export interface VuiVoiceInputEmits {
-	/** :modelValue 录音状态变化 */
-	update: (...args: any[]) => void;
+	/** 录音状态变化 */
+	'update:modelValue': (...args: any[]) => void;
 	/** 开始录音 */
 	start: (...args: any[]) => void;
 	/** 结束录音（非取消） */

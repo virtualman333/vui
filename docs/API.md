@@ -208,7 +208,7 @@
 
 | 事件名 | 说明 |
 | --- | --- |
-| `update` | :modelValue 值变化时触发（v-model） |
+| `update:modelValue` | 值变化时触发（v-model） |
 | `input` | 值变化时触发（兼容写法） |
 | `blur` | 失焦时触发，参数为当前值 |
 | `change` | 内容确认变化时触发，参数为当前值 |
@@ -277,7 +277,7 @@
 
 | 事件名 | 说明 |
 | --- | --- |
-| `update` | :modelValue 状态变化时触发（v-model） |
+| `update:modelValue` | 状态变化时触发（v-model） |
 | `change` | 状态变化时触发 |
 
 ### vui-select
@@ -383,15 +383,16 @@
 
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| value | `Array` | `[0,0,0]` | = [默认值] |
-| level | `number` | `3` | = [1：省\|2：省市\|3：省市区\|4：省市区镇] |
+| value | `Array` | `[0, 0, 0, 0]` | = [省下标, 市下标, 区下标, 镇下标] 各列初始选中的下标（缺项与越界一律按 0，不会报错） |
+| level | `number` | `3` | = [1 / 2 / 3 / 4] 生效层级：1 省，2 省市，3 省市区，4 省市区镇（越界与非法值按 3） |
 
 **事件**
 
 | 事件名 | 说明 |
 | --- | --- |
 | `change` | 选完一列并确认时触发，参数为 picker 的 change 事件对象 |
-| `columnchange` | 滚动某一列时触发（无参数）—— 用于联动刷新下一列的可选项 |
+| `columnchange` | 滚动某一列时触发，参数为当前各列选中下标数组 |
+| `update:value` | 选中项变化时触发，参数为当前各列选中下标数组（不用 v-model 也能拿到） |
 
 ### vui-date-picker
 
@@ -909,7 +910,7 @@
 
 | 事件名 | 说明 |
 | --- | --- |
-| `update` | :modelValue 输入内容变化 |
+| `update:modelValue` | 输入内容变化 |
 | `send` | 点击发送时触发，参数为当前文本 |
 | `stop` | 生成中点击停止时触发 |
 | `voice` | 点击语音入口时触发 |
@@ -956,7 +957,7 @@
 
 | 事件名 | 说明 |
 | --- | --- |
-| `update` | :modelValue 展开状态变化 |
+| `update:modelValue` | 展开状态变化 |
 | `toggle` | 展开状态变化时触发，参数为当前是否展开 |
 
 **插槽**
@@ -981,7 +982,7 @@
 
 | 事件名 | 说明 |
 | --- | --- |
-| `update` | :modelValue 评价变化 |
+| `update:modelValue` | 评价变化 |
 | `change` | 评价变化时触发，参数为当前值 |
 | `like` | 选中赞同 |
 | `dislike` | 选中不赞同 |
@@ -1051,7 +1052,7 @@
 | 事件名 | 说明 |
 | --- | --- |
 | `click` | 点击卡片时触发 |
-| `update` | :modelValue 选中状态变化 |
+| `update:modelValue` | 选中状态变化 |
 | `change` | 选中状态变化时触发，参数为当前是否选中 |
 
 ### vui-markdown
@@ -1090,7 +1091,7 @@
 
 | 事件名 | 说明 |
 | --- | --- |
-| `update` | :modelValue 选中值变化 |
+| `update:modelValue` | 选中值变化 |
 | `change` | 选中值变化时触发，参数为选中项对象 |
 
 ### vui-voice-input
@@ -1110,7 +1111,7 @@
 
 | 事件名 | 说明 |
 | --- | --- |
-| `update` | :modelValue 录音状态变化 |
+| `update:modelValue` | 录音状态变化 |
 | `start` | 开始录音 |
 | `stop` | 结束录音（非取消） |
 | `cancel` | 上滑取消录音 |

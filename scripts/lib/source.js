@@ -237,6 +237,28 @@ function propertyNames(doc) {
 }
 
 /**
+ * JSDoc `@event {T} name 说明` 的名字集合（顺序即文档顺序）。
+ *
+ * ⚠ 事件名的字符类**必须含 `:`** —— `update:modelValue` / `update:value` 这类
+ *   「带修饰的事件名」是本仓库 9 个组件的写法。字符类里的名字部分用显式 ASCII
+ *   （不用 `\w`）：Python 的 `\w` 匹配中文、JS 的不匹配，两边写 `\w` 就会解析出
+ *   不同的名字集合。与 `gen-docs.py` / `gen-package.py` 的 @event 正则同源。
+ *
+ * 这个函数存在的理由：产物里的**事件名**一直没人对账。旧字符类不含 `:`，
+ * 于是 `@event {Function} update:modelValue 值变化时触发（v-model）` 被切成
+ * 名字 `update` + 说明 `:modelValue 值变化时触发（v-model）`，`docs/API.md`
+ * 与 `types/index.d.ts` 里那个事件就叫 `update` —— 宿主按 `@update:modelValue`
+ * 写处理器时文档里查不到。改了正则之后得有人盯着它不许退回去。
+ */
+function eventNames(doc) {
+  const out = [];
+  for (const m of doc.matchAll(/@event\s*\{[^}]*\}\s*([A-Za-z_$][A-Za-z0-9_$:-]*)/g)) {
+    out.push(m[1]);
+  }
+  return out;
+}
+
+/**
  * JSDoc 里的插槽登记：`@slot [名称] [{作用域参数}] 说明`
  *
  * ⚠ 与 `scripts/gen-docs.py` 的 `SLOT_RE` **必须逐字一致**（字符类显式 ASCII，
@@ -319,6 +341,7 @@ function markdownTables(text) {
 
 module.exports = {
   dropLeadingCommentLines,
+  eventNames,
   firstJsDoc,
   markdownTables,
   propertyNames,
