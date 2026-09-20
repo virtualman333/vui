@@ -585,11 +585,11 @@
 
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| modelValue | `string` | `''` | 选中日期 YYYY-MM-DD，支持 v-model |
-| startWeek | `any` | `0` | 每周起始日 0 周日 / 1 周一 |
+| modelValue | `string` | `''` | 选中日期 YYYY-MM-DD，支持 v-model（非补零写法会先收敛） |
+| startWeek | `any` | `0` | 每周起始日 0 周日 / 1 周一（先归一到 0~6） |
 | color | `string` | `''` | 选中颜色 |
-| minDate | `string` | `''` | 可选最小日期 YYYY-MM-DD |
-| maxDate | `string` | `''` | 可选最大日期 YYYY-MM-DD |
+| minDate | `string` | `''` | 可选最小日期 YYYY-MM-DD（非补零写法会先收敛） |
+| maxDate | `string` | `''` | 可选最大日期 YYYY-MM-DD（非补零写法会先收敛） |
 
 **事件**
 

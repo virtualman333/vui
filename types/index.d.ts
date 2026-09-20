@@ -58,15 +58,15 @@ export const VuiButton: DefineComponent<VuiButtonProps>;
 
 /** Calendar 日历 */
 export interface VuiCalendarProps {
-	/** 选中日期 YYYY-MM-DD，支持 v-model */
+	/** 选中日期 YYYY-MM-DD，支持 v-model（非补零写法会先收敛） */
 	modelValue?: string;
-	/** 每周起始日 0 周日 / 1 周一 */
+	/** 每周起始日 0 周日 / 1 周一（先归一到 0~6） */
 	startWeek?: any;
 	/** 选中颜色 */
 	color?: string;
-	/** 可选最小日期 YYYY-MM-DD */
+	/** 可选最小日期 YYYY-MM-DD（非补零写法会先收敛） */
 	minDate?: string;
-	/** 可选最大日期 YYYY-MM-DD */
+	/** 可选最大日期 YYYY-MM-DD（非补零写法会先收敛） */
 	maxDate?: string;
 }
 

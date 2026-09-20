@@ -55,6 +55,24 @@
  *   9. `OnColumnchange` 里 `this.value[col] = idx` **就地改写宿主数组**（静默改父状态）。
  *  10. 显示文本那段表达式在模板里按 level 各写一遍（三处）。
  *
+ * 第 30 轮接进 `vui-calendar`（宿主手写日期串）。它是唯一一个**把日期当字符串比**的
+ * 纯函数组件（`vui-date-picker` 走数值下标、`vui-time-picker` 两轮前已被 `trimTo()`
+ * 收过精度），挂在这份检查的候选里两轮没人接 —— 一接进来当场四件事：
+ *
+ *  11. **`minDate="2026-9-1"` 把整月禁掉**：`'2026-09-01' < '2026-9-1'` 成立（第 6 位
+ *      `0` < `9`），实测 2026-09 的 30 格**一格都点不动**，页面上没有任何报错。
+ *  12. **`modelValue="2026-9-01"` 一格都不高亮**：`selected` 存的是宿主原文，跟格子的
+ *      补零写法永远不相等；点一下之后又会自己「好」—— 最难查的那种。
+ *  13. **`parseDate` 把越界日期静默滚到另一天**：`'2026-02-30'` → 3 月 2 日、
+ *      `'2026-13-01'` → 2027-01-01、`'2026-00-10'` → 2025-12-10。宿主写错一位，
+ *      高亮的是另一天；`minDate` 写错则悄悄变成「上界在明年 1 月」。
+ *  14. **`startWeek="-1"` 表头只剩 6 个字**：`(-1 + i) % 7` 在 i=0 处得 -1，
+ *      `WEEK_LABELS[-1]` 是 undefined；而 `days` 的偏移算的是「周六开头」——
+ *      表头与格子静默错开一位。
+ *
+ * 11~14 是同一族的第 5 次出现（宿主入参不收敛就直接用），也是 `vui-time-picker` 那轮
+ * 立下的规矩没被推广到的最后一处：**入参先收成组件自己的表示，再参与任何比较**。
+ *
  * 做法
  * ----
  * 与 `check:markdown` 同一套：用 `@vue/compiler-sfc` 的 `parse()` 取 `<script>`（不手写
@@ -86,6 +104,7 @@ const PROGRESS = 'uni_modules/vui-progress/components/vui-progress/vui-progress.
 const TABS = 'uni_modules/vui-tabs/components/vui-tabs/vui-tabs.vue';
 const TYPING = 'uni_modules/vui-typing/components/vui-typing/vui-typing.vue';
 const REGION = 'uni_modules/vui-region-picker/components/vui-region-picker/vui-region-picker.vue';
+const CALENDAR = 'uni_modules/vui-calendar/components/vui-calendar/vui-calendar.vue';
 
 /**
  * 被测组件：`路径 → 入口`。**这里是唯一登记处** —— 加载器自证直接遍历它。
@@ -108,16 +127,17 @@ const SUBJECTS = {
 	[PROGRESS]: 'computed:text',
 	[TABS]: 'computed:currentIndex',
 	[TYPING]: 'computed:targetText',
-	[REGION]: 'getData'
+	[REGION]: 'getData',
+	[CALENDAR]: 'parseDate'
 };
 
 /**
  * 断言条数下限：低于它说明加载器/枚举塌了，而不是「缺陷变少了」。
- * 现网实测 78 条（登记 10 个组件，第 29 轮把 vui-region-picker 接进来后从 67 → 78；
+ * 现网实测 91 条（登记 11 个组件，第 30 轮把 vui-calendar 接进来后从 78 → 91；
  * 这里的计数发生在「条数下限」与两条自证之前，别把自证算进来）；留 8 条余量，
  * 只挡住「整片没跑」级别的塌陷。
  */
-const FLOOR = 70;
+const FLOOR = 83;
 
 console.log('\n[vui-uniapp] 纯函数型组件的行为测试（真的跑组件代码）');
 
@@ -191,15 +211,20 @@ function loadOptions(rel) {
 
 /**
  * 最小实例。顺序有讲究：
- *   methods → props → data() → computed（getter） → overrides
+ *   methods → props → **initProps** → data() → computed（getter） → overrides
  * ① methods 要在 `data()` 之前 —— 组件的 `data()` 会调 `this.someMethod()`
  *    （vui-calendar 的 `data()` 就调了 `this.parseDate`）。
  * ② overrides 放最后，才能盖住 props 与 data 两处的默认值（`rect` 是 data）。
  * ③ `runCreated`（第 29 轮加，默认 false 保持既有调用点不变）：`vui-region-picker` 的
  *    初始化在 `created()` 里（`this.getData()`），那是它的**主路径**，不跑就等于没测。
  *    默认关掉是因为别的组件 `created` 里是副作用，跑来只会把日志弄脏。
+ * ④ `initProps`（第 30 轮加）：`overrides` 是**在 `data()` 之后**盖的，盖不到 `data()`
+ *    里已经算好的初值。`vui-calendar` 的 `data()` 会读 `modelValue` 定月份与选中项 ——
+ *    用 `overrides` 传 `modelValue` 只能拿到「按默认 props 算出来的」那一份（实测
+ *    `selected` 还是空串，会让人误判成组件没修好）。所以需要一个能在 `data()` 之前
+ *    落地的入参。
  */
-function mount(rel, overrides, runCreated) {
+function mount(rel, overrides, runCreated, initProps) {
   const options = loadOptions(rel);
   const vm = { __events: [] };
   for (const [k, fn] of Object.entries(options.methods || {})) vm[k] = fn;
@@ -207,6 +232,7 @@ function mount(rel, overrides, runCreated) {
     const d = spec && 'default' in spec ? spec.default : undefined;
     vm[k] = typeof d === 'function' ? d() : d;
   }
+  if (initProps) Object.assign(vm, initProps);
   Object.assign(vm, typeof options.data === 'function' ? options.data.call(vm) : {});
   for (const [k, fn] of Object.entries(options.computed || {})) {
     Object.defineProperty(vm, k, { get: () => fn.call(vm), enumerable: true, configurable: true });
@@ -962,6 +988,266 @@ test('region-picker · level 传字符串 / 非法值一律收敛，不再产出
   eq(region({ level: '4' }).lists.length, 4, "level='4' 应当被收敛成 4");
   eq(region({ level: 9 }).lists.length, 3, '越界的 level 应当退回默认 3');
   eq(region({ level: 0 }).lists.length, 3, 'level=0 应当退回默认 3');
+});
+
+// ── vui-calendar：宿主手写的日期串 vs 组件自己产出的日期串 ────────────────
+//
+// 它是唯一一个**把日期当字符串比**的纯函数组件（`vui-date-picker` 走数值下标、
+// `vui-time-picker` 两轮前已被 `trimTo()` 收过精度），所以它一直挂在这份检查的候选里
+// 却没人接 —— 一接进来当场四件事，全是静态检查隐形的：
+//
+//   ① `minDate="2026-9-1"`（不补零）→ `'2026-09-01' < '2026-9-1'` 成立（第 6 位
+//      `0` < `9`），实测 2026-09 的 **30 格一格都点不动**，页面上没有任何报错；
+//   ② `modelValue="2026-9-01"` → 一格都不高亮（`selected` 存的是宿主原文，跟格子的
+//      补零写法永远不相等），点一下之后又会自己「好」—— 最难查的那种；
+//   ③ `parseDate` 把越界日期静默滚到另一天：`'2026-02-30'` → 3 月 2 日、
+//      `'2026-13-01'` → 2027-01-01、`'2026-00-10'` → 2025-12-10；
+//   ④ `startWeek="-1"` 表头只剩 6 个字（`WEEK_LABELS[-1]` 是 undefined），而 `days` 的
+//      偏移算的是「周六开头」—— 表头与格子静默错开一位。
+//
+// 判据里的日期全部锚在**能手算的真实日历**上（2026-09-01 是周二、2026-01-01 是周四），
+// 不用「非空」「长度对」这类恒真的话。
+
+/**
+ * 日历探针。两个入参必须分开，理由见 `mount()` 的 ④：
+ *   · `props` 走 `initProps` —— `data()` 会读 `modelValue` 定月份与选中项，必须**先于**
+ *     `data()` 落地（用 overrides 传它只能拿到「按默认 props 算出来的」那一份）。
+ *   · `view` 走 `overrides` —— `year` / `month` 是 `data()` 里算出来的初值，要盖住它就得
+ *     在 `data()` 之后；`days` / `weekLabels` / `minBound` 都是 computed，读的时候才求值，
+ *     所以盖得住。
+ */
+const calendar = (props, view) => mount(CALENDAR, view || {}, false, props || {});
+
+/** 按日期取一格。取不到直接炸 —— 免得断言读到一个 `undefined` 还绿（本文件的老坑） */
+const dm = (vm, date) => {
+  const cell = vm.days.find((c) => c.date === date);
+  ok(cell, `网格里没有 ${date} 这一格（月份 / 每周起始日算错，或这条断言的前提不成立）`);
+  return cell;
+};
+
+/**
+ * 「拿宿主手写的日期串直接跟组件自己产出的日期串比」的形状。
+ * 与 `INDEX_COMPARE_RE` / `COERCION_RE` 同一套思路：宽扫只认形状，判据要求同文件里
+ * 能看到日期收敛。**注意本轮修完之后宽扫结果是空的**（那正是目标），所以这条锁的价值
+ * 全在「判据自证」那一半 —— 以后谁再写回旧形状就会红。
+ */
+const DATE_COMPARE_RE = /(?:date|this\.[A-Za-z_$][\w$]*)\s*(?:===|!==|<=|>=|<|>)\s*this\.(?:minDate|maxDate)\b|this\.(?:minDate|maxDate)\s*(?:===|!==|<=|>=|<|>)/;
+const DATE_NORMALIZE_RE = /normalizeDate\(|parseDate\(/;
+
+test('calendar · 网格永远整周，本月首末格与真实日历一致', () => {
+  for (const [y, m] of [[2026, 1], [2026, 2], [2026, 3], [2026, 8], [2026, 9], [2026, 12], [2024, 2]]) {
+    const vm = calendar({}, { year: y, month: m, startWeek: 0 });
+    const days = vm.days;
+    const label = `${y}-${pad2(m)}`;
+    const total = new Date(y, m, 0).getDate();
+    eq(days.length % 7, 0, `${label} 的格子数不是整周（${days.length}）`);
+    const cur = days.filter((c) => c.current);
+    eq(cur.length, total, `${label} 本月格子数不是 ${total} 天`);
+    eq(cur[0].date, `${y}-${pad2(m)}-01`, `${label} 本月第一格不是 1 号`);
+    eq(cur[cur.length - 1].date, `${y}-${pad2(m)}-${pad2(total)}`, `${label} 本月最后一格不对`);
+    ok(days.slice(0, days.indexOf(cur[0])).every((c) => !c.current),
+      `${label} 本月段前面混进了 current 的格子（补位段与本月段交错了）`);
+    ok(days.slice(days.indexOf(cur[0]) + total).every((c) => !c.current),
+      `${label} 本月段后面混进了 current 的格子`);
+  }
+});
+
+test('calendar · 首格偏移与表头用的是同一个「每周起始日」', () => {
+  // 前提：2026-09-01 是周二。前提不成立就先修这条，别让断言在错的日历上绿
+  eq(new Date(2026, 8, 1).getDay(), 2, '前提不成立：2026-09-01 不是周二');
+  const LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+  for (const sw of [0, 1, 2, 6]) {
+    const vm = calendar({}, { year: 2026, month: 9, startWeek: sw });
+    const days = vm.days;
+    eq(vm.weekLabels.length, 7, `startWeek=${sw} 的表头不是 7 列`);
+    eq(vm.weekLabels[0], LABELS[sw], `startWeek=${sw} 的表头首字不对`);
+    const idx = days.indexOf(days.find((c) => c.current));
+    eq(idx, (2 - sw + 7) % 7, `startWeek=${sw} 时 1 号落在第 ${idx} 格，手算是 ${(2 - sw + 7) % 7}`);
+    // 首格的真实星期必须等于 startWeek —— 表头与格子错位时这条会红
+    const p = days[0].date.split('-').map(Number);
+    eq(new Date(p[0], p[1] - 1, p[2]).getDay(), sw, `startWeek=${sw} 时首格不是那个星期`);
+  }
+});
+
+test('calendar · 补位格跨月/跨年按真实日历走（不是把 31 号硬塞给上个月）', () => {
+  eq(new Date(2026, 0, 1).getDay(), 4, '前提不成立：2026-01-01 不是周四');
+  const jan = calendar({}, { year: 2026, month: 1, startWeek: 0 });
+  eq(jan.days[0].date, '2025-12-28', '跨年的补位格起点不对');
+  eq(jan.days[3].date, '2025-12-31', '跨年的补位格终点不对');
+  const dec = calendar({}, { year: 2026, month: 12, startWeek: 0 });
+  eq(dec.days[dec.days.length - 1].date, '2027-01-02', '跨到下一年时补位格走到别的日子去了');
+  // 每一格都必须是**真实存在的日历日**（`shiftMonth` 手滑就会造出「2 月 31 日」）
+  const bad = [];
+  for (const [y, m, sw] of [[2026, 1, 0], [2026, 3, 0], [2026, 12, 0], [2024, 2, 0], [2026, 8, 1], [2026, 3, 6]]) {
+    for (const c of calendar({}, { year: y, month: m, startWeek: sw }).days) {
+      const p = c.date.split('-').map(Number);
+      const d = new Date(p[0], p[1] - 1, p[2]);
+      if (d.getFullYear() !== p[0] || d.getMonth() !== p[1] - 1 || d.getDate() !== p[2]) bad.push(c.date);
+    }
+  }
+  eq(JSON.stringify(bad), '[]', `补位格里出现了不存在的日期：${bad.join(', ')}`);
+});
+
+test('calendar · ★ minDate 不补零也不会把整月禁掉（旧实现 30/30 全禁）', () => {
+  const vm = calendar({}, { year: 2026, month: 9, minDate: '2026-9-10' });
+  const days = vm.days;
+  const dis = days.filter((c) => c.disabled).map((c) => c.date);
+  ok(dis.length > 0 && dis.length < days.length,
+    `禁用格 ${dis.length} / 总格 ${days.length} —— 要么一格没禁、要么整月被禁，两种都说明边界没收敛`);
+  // 逐格对账：受禁的必须**恰好**是「早于 2026-09-10」的那些
+  const expect = days.filter((c) => c.date < '2026-09-10').map((c) => c.date);
+  eq(JSON.stringify(dis), JSON.stringify(expect), '受禁的格子与「早于 minDate」不是同一批');
+  eq(dis.length, 11, `受禁格数应当是 11（08-30 ~ 09-09），实际 ${dis.length}`);
+});
+
+test('calendar · min/max 边界当天可选，前后一天不可选', () => {
+  const vm = calendar({}, { year: 2026, month: 9, minDate: '2026-09-10', maxDate: '2026-09-20' });
+  const at = (d) => {
+    const c = dm(vm, d);
+    return c.disabled;
+  };
+  eq(at('2026-09-09'), true, 'min 前一天应当不可选');
+  eq(at('2026-09-10'), false, 'min 当天应当可选（判据是 `<` 不是 `<=`）');
+  eq(at('2026-09-20'), false, 'max 当天应当可选（判据是 `>` 不是 `>=`）');
+  eq(at('2026-09-21'), true, 'max 后一天应当不可选');
+  eq(at('2026-08-31'), true, '上一月的补位格早于 min，应当不可选');
+  // 补零写的边界与不补零写的必须给出同一批禁用格 —— 否则「格式」又变成了行为差异
+  const padded = calendar({}, { year: 2026, month: 9, minDate: '2026-09-10', maxDate: '2026-09-20' });
+  eq(JSON.stringify(vm.days.map((c) => c.disabled)), JSON.stringify(padded.days.map((c) => c.disabled)),
+    '补零与不补零的边界算出了两批禁用格');
+});
+
+test('calendar · ★ modelValue 不补零时也要高亮（旧实现一格都不选中）', () => {
+  // 用 3 月而不是当月：这样「月份跟着 modelValue 走」也一并被钉住（当月会恒真）
+  const vm = calendar({ modelValue: '2026-3-05' });
+  eq(vm.selected, '2026-03-05', 'selected 存的不是组件自己的定长写法（存了宿主原文）');
+  eq(JSON.stringify([vm.year, vm.month]), '[2026,3]', '月份没有跟着 modelValue 走');
+  const sel = vm.days.filter((c) => c.selected).map((c) => c.date);
+  eq(JSON.stringify(sel), '["2026-03-05"]', `高亮的格子是 ${JSON.stringify(sel)} —— 用户会以为没选中`);
+  // 对照：标准写法必须得到同一结果，否则这条锁的只是「某种写法恰好能过」
+  const std = calendar({ modelValue: '2026-03-05' });
+  eq(JSON.stringify(std.days.filter((c) => c.selected).map((c) => c.date)), JSON.stringify(sel),
+    '两种写法高亮的不是同一格');
+});
+
+test('calendar · 越界日期不再被静默滚到另一天', () => {
+  const vm = calendar({});
+  ok(typeof vm.parseDate === 'function', 'parseDate 不见了 —— 被测入口没了');
+  // 这些都会被 `new Date(y, m-1, d)` 悄悄滚走，一个字都不报
+  for (const bad of ['2026-02-30', '2026-13-01', '2026-00-10', '2026-09-32', '2026-11-31']) {
+    eq(String(vm.parseDate(bad)), 'null', `${bad} 被解析成了别的日期 —— 宿主写错一位会高亮另一天`);
+    eq(vm.normalizeDate(bad), '', `${bad} 应当收敛成空串`);
+  }
+  // 合法但没补零的写法仍要照收（收敛 ≠ 挑剔格式）
+  eq(vm.normalizeDate('2026-9-1'), '2026-09-01', '没补零的合法日期不该被拒');
+  eq(vm.normalizeDate('2024-02-29'), '2024-02-29', '闰年的 2 月 29 日是合法的');
+  eq(vm.normalizeDate('2026-02-29'), '', '平年的 2 月 29 日不存在');
+  eq(vm.normalizeDate(''), '', '空串应当收敛成空串（不是 null，也不是今天的日期）');
+});
+
+test('calendar · startWeek 归一化到 0~6，负数不再让表头缺一格', () => {
+  const LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+  // ⚠ 13 与 -8 不是凑数：`Number(sw) || 0` 与 `((n % 7) + 7) % 7` 只在 sw 落在
+  //   [-6, 6] 之外时才给出不同结果，只测 0/1/6 的话「days 那一侧退回未归一化写法」
+  //   会完全看不见（负向验证实测：只测小值时该注入漏判）。
+  for (const [raw, want] of [[-1, 6], [7, 0], ['1', 1], [0, 0], [6, 6], [13, 6], [-8, 6], ['不是数', 0], [null, 0]]) {
+    const vm = calendar({}, { year: 2026, month: 9, startWeek: raw });
+    const tag = `startWeek=${JSON.stringify(raw)}`;
+    eq(vm.startWeekday, want, `${tag} 没有归一到 ${want}`);
+    eq(vm.weekLabels.length, 7, `${tag} 的表头只有 ${vm.weekLabels.length} 列`);
+    eq(vm.weekLabels[0], LABELS[want], `${tag} 的表头首字不对`);
+    ok(vm.weekLabels.every((x) => typeof x === 'string' && x.length === 1),
+      `${tag} 的表头里有洞：${JSON.stringify(vm.weekLabels)}`);
+    // 表头与格子必须错位一致：首格的真实星期 == 表头首字代表的那天
+    const p = vm.days[0].date.split('-').map(Number);
+    eq(LABELS[new Date(p[0], p[1] - 1, p[2]).getDay()], vm.weekLabels[0], `${tag} 的表头与首格错位了`);
+  }
+});
+
+test('calendar · onSelect：正常格发两个事件并翻到当月，禁用格一声不响', () => {
+  const vm = calendar({}, { year: 2026, month: 9, minDate: '2026-09-10' });
+  vm.onSelect(dm(vm, '2026-09-15'));
+  eq(vm.selected, '2026-09-15', '选中项没跟上');
+  eq(vm.lastPayload('update:modelValue'), '2026-09-15', 'update:modelValue 的载荷不对');
+  eq(vm.pickEvent('change').length, 1, 'change 应当恰好发一次');
+  const before = vm.selected;
+  const dis = vm.days.find((c) => c.disabled);
+  ok(dis, '这个月份里没有禁用格 —— 断言前提不成立');
+  vm.onSelect(dis);
+  eq(vm.pickEvent('update:modelValue').length, 1, `点禁用格（${dis.date}）又发了一次 update:modelValue`);
+  eq(vm.pickEvent('change').length, 1, `点禁用格（${dis.date}）又发了一次 change`);
+  eq(vm.selected, before, '点禁用格把选中项改掉了');
+  // 点上一月的补位格要把视图翻过去，否则用户点了个「看着像别的月」的日子却没反应
+  const vm2 = calendar({}, { year: 2026, month: 9, startWeek: 0 });
+  vm2.onSelect(dm(vm2, '2026-08-30'));
+  eq(JSON.stringify([vm2.year, vm2.month]), '[2026,8]', '点上一月的补位格没有把视图翻过去');
+});
+
+test('calendar · onPrev / onNext 在 1 月与 12 月跨年', () => {
+  const go = (y, m, pick) => {
+    const vm = calendar({}, { year: y, month: m });
+    vm[pick]();
+    return [vm.year, vm.month];
+  };
+  eq(JSON.stringify(go(2026, 1, 'onPrev')), '[2025,12]', '1 月的上一月不对');
+  eq(JSON.stringify(go(2026, 12, 'onNext')), '[2027,1]', '12 月的下一月不对');
+  eq(JSON.stringify(go(2026, 8, 'onPrev')), '[2026,7]', '普通月份的上一月不对');
+  eq(JSON.stringify(go(2026, 8, 'onNext')), '[2026,9]', '普通月份的下一月不对');
+});
+
+test('calendar · watch(modelValue)：归一化，非法值不落进 selected', () => {
+  const options = loadOptions(CALENDAR);
+  ok(typeof options.watch.modelValue === 'function', 'modelValue 的 watch 不见了 —— 这条断言会变成空话');
+  const vm = calendar({});
+  options.watch.modelValue.call(vm, '2026-12-25');
+  eq(vm.selected, '2026-12-25', 'watch 没有把选中项归一化');
+  eq(JSON.stringify([vm.year, vm.month]), '[2026,12]', 'watch 没有把视图翻到那一月');
+  options.watch.modelValue.call(vm, '2026-3-05');
+  eq(vm.selected, '2026-03-05', 'watch 对没补零的值没有归一化');
+  options.watch.modelValue.call(vm, '');
+  eq(vm.selected, '', '清空时 selected 没有跟着清掉');
+  options.watch.modelValue.call(vm, '不是日期');
+  eq(vm.selected, '', '非法值被原样存进了 selected（应当收敛成空串）');
+});
+
+test('calendar · 边界只以归一化后的 computed 形式出现（buildCell 不许碰宿主原文）', () => {
+  const options = loadOptions(CALENDAR);
+  // ① 归一化后的边界必须是 computed，且真的把宿主原文收成了定长写法
+  const vm = calendar({}, { year: 2026, month: 9, minDate: '2026-9-10', maxDate: '' });
+  eq(vm.minBound, '2026-09-10', 'minBound 没有把宿主原文收敛成定长写法');
+  eq(vm.maxBound, '', 'maxDate 为空时上界应当是空串（要靠 `max && …` 短路）');
+  // ② 结构锁：整个脚本里不许再出现「格子字符串 vs this.minDate」这种比较
+  const { descriptor } = parse(fs.readFileSync(path.join(root, CALENDAR), 'utf8'));
+  const code = descriptor.script.content
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('//'))
+    .join('\n');
+  eq(JSON.stringify(code.match(DATE_COMPARE_RE)), 'null',
+    '脚本里又出现了「拿格子字符串直接比宿主原文」的形状（宿主写 2026-9-1 就会把整月禁掉）');
+  eq(DATE_NORMALIZE_RE.test(code), true, '脚本里没有日期收敛 —— 上面那条会变成恒真的空话');
+  // ③ 判据自证：旧那一行塞回去必须被判出来，而收敛后的写法必须放行
+  ok(DATE_COMPARE_RE.test('const disabled = (this.minDate && date < this.minDate) || (this.maxDate && date > this.maxDate);'),
+    '判据抓不到旧写法 —— 这条锁是空话');
+  eq(DATE_COMPARE_RE.test('const min = this.minBound; const disabled = (min && date < min);'), false,
+    '判据过宽：收敛后的写法被认成「直接比」，以后会把已经修好的组件算进名单');
+});
+
+test('对账 · 拿宿主日期串直接跟格子比的组件，脚本里必须能看到日期收敛', () => {
+  const all = componentScripts();
+  ok(all.length >= 40, `只扫到 ${all.length} 个组件的脚本 —— 扫描面塌了，下面的对账会变成空话`);
+  const hits = all.filter((s) => DATE_COMPARE_RE.test(s.code));
+  const without = hits.filter((s) => !DATE_NORMALIZE_RE.test(s.code)).map((s) => s.rel);
+  eq(JSON.stringify(without), '[]',
+    `这些组件拿宿主手写的日期串直接跟组件自己产出的日期串比，却没有一处日期收敛：${without.join('、')}`
+    + ' —— 宿主写 `2026-9-1` 时比较会静默走反（vui-calendar 的 minDate 就是这么把整月禁掉的）');
+  // 本轮修完之后 hits 应当为空（那正是目标），所以这条锁的判据面靠下面三条自证撑着
+  eq(DATE_COMPARE_RE.test('disabled: date < this.minDate'), true, '合成样本没被认出来 —— 宽扫恒假');
+  eq(DATE_COMPARE_RE.test('if (this.maxDate === date) return;'), true, '反过来的比较没被认出来');
+  eq(DATE_COMPARE_RE.test('const min = this.normalizeDate(this.minDate); return date < min;'), false,
+    '收敛写法被误判 —— 宽扫过宽，会把已经修好的组件算进「没收敛」名单');
+  // 扫描面必须真的覆盖到 vui-calendar（它是这条宽扫的起因）
+  ok(all.some((s) => s.rel === 'vui-calendar'), '扫描结果里没有 vui-calendar —— 这条对账根本没在它身上跑');
 });
 
 // ── 收尾：条数下限 + 加载器自证 ──
