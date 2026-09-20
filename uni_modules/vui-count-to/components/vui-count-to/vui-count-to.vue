@@ -135,7 +135,12 @@ export default {
 		},
 		/* 数字格式化：先定小数位，再补千分位。负号不参与分组。 */
 		format(value) {
-			const decimals = Math.max(0, Number(this.decimals) || 0);
+			/* decimals 必须收成 0~100 的整数：`toFixed` 对 >100 会**抛 RangeError**，
+			   而这里是在 display 计算属性上调的 —— 抛出去就是整个组件渲染崩掉（页面白屏，
+			   报错还落在 Vue 的计算属性栈里，看不出是 props 写错）。非数值（NaN/undefined）
+			   按 0 处理；小数位（2.5）本来就只能表示整数位，这里显式取整，不靠 toFixed 内部行为。 */
+			const rawDecimals = Number(this.decimals);
+			const decimals = isFinite(rawDecimals) ? Math.min(100, Math.max(0, Math.floor(rawDecimals))) : 0;
 			const fixed = (Number(value) || 0).toFixed(decimals);
 			if (!this.separator) return fixed;
 			const negative = fixed.charAt(0) === '-';
@@ -143,7 +148,11 @@ export default {
 			const dot = body.indexOf('.');
 			const int = dot === -1 ? body : body.slice(0, dot);
 			const rest = dot === -1 ? '' : body.slice(dot);
-			return (negative ? '-' : '') + int.replace(/\B(?=(\d{3})+(?!\d))/g, this.separator) + rest;
+			/* 用函数式替换：分隔符里若含 `$&` / `$1` / `` $` `` 这类字符，字符串式替换会把它
+			   当成**替换模式**而不是字面量 —— 实测 `separator="$&"` 输出 "1234567"，
+			   千分位静默消失（用户以为自己传了分隔符）。 */
+			const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, () => this.separator);
+			return (negative ? '-' : '') + grouped + rest;
 		},
 		/* 从 start 滚到 end。重复调用会先停掉上一轮，避免两个定时器叠加加速。 */
 		restart() {

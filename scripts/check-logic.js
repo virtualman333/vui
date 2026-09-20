@@ -27,6 +27,22 @@
  * 当成两个数组各按下标取，于是**点第 3 张会打开别的图**（越界时静默退回第一张）。
  * 同样是静态检查完全隐形的那一类 —— 语法对、产物一致、props 登记齐全。
  *
+ * 第 27 轮再补三个（vui-steps / vui-count-to / vui-progress），三处是同一族：
+ * **宿主传进来的入参没有先收敛就直接用**。
+ *
+ *   4. **vui-steps 的 `modelValue` 直接参与比较**：宿主绑字符串（`'1'` —— v-model 挂在
+ *      data 上、或 index 从接口来，很常见）时 `index === modelValue` 恒 false →
+ *      **没有任何一步是当前态**；而 `index < modelValue` 靠隐式转换照旧成立 →
+ *      前面打勾、当前步被跳过。越界（99）与负数（-3）同样没有当前态，全都不报错。
+ *      这与 vui-pagination 第 24 轮修掉的是**同一个形状**（宿主把索引绑成字符串）。
+ *   5. **vui-count-to 的 `decimals` 没收敛**：`toFixed(d)` 对 `d > 100` **抛 RangeError**，
+ *      而它是在 `display` 计算属性里调的 —— 直接让整个组件渲染崩掉（页面白屏，报错还挂在
+ *      Vue 的计算属性栈上）。同一个 `format()` 里的千分位用的是**字符串式 replace**，
+ *      分隔符含 `$&` 时会被当成替换模式：实测 `separator="$&"` 输出 `"1234567"`，
+ *      千分位静默消失。
+ *   6. **vui-progress 的 `format` 只替换第一个占位符**：`replace('{value}', …)` 不是全局
+ *      替换，`format="{value}%（{value} 项）"` 会把第二个 `{value}` 原样吐给用户。
+ *
  * 做法
  * ----
  * 与 `check:markdown` 同一套：用 `@vue/compiler-sfc` 的 `parse()` 取 `<script>`（不手写
@@ -52,9 +68,15 @@ const SLIDER = 'uni_modules/vui-slider/components/vui-slider/vui-slider.vue';
 const TIME = 'uni_modules/vui-time-picker/components/vui-time-picker/vui-time-picker.vue';
 const PAGINATION = 'uni_modules/vui-pagination/components/vui-pagination/vui-pagination.vue';
 const UPLOAD = 'uni_modules/vui-upload/components/vui-upload/vui-upload.vue';
+const STEPS = 'uni_modules/vui-steps/components/vui-steps/vui-steps.vue';
+const COUNT = 'uni_modules/vui-count-to/components/vui-count-to/vui-count-to.vue';
+const PROGRESS = 'uni_modules/vui-progress/components/vui-progress/vui-progress.vue';
 
 /**
- * 被测组件：`路径 → 入口方法`。**这里是唯一登记处** —— 加载器自证直接遍历它。
+ * 被测组件：`路径 → 入口`。**这里是唯一登记处** —— 加载器自证直接遍历它。
+ *
+ * 入口写法：方法名（`typeof vm[x] === 'function'`）；`computed:xxx` 表示该组件没有方法，
+ * 入口是一个计算属性（vui-progress 全是 computed，连一个 method 都没有）。
  *
  * 为什么要有这张表：原先自证里手抄了一个三元素数组，于是「少抄一个组件」只是让循环
  * 少跑一圈，**静默通过**。实测把 `vui-upload` 那条删掉，全部断言照样绿（V6 注入）。
@@ -65,11 +87,14 @@ const SUBJECTS = {
 	[SLIDER]: 'updateByClientX',
 	[TIME]: 'onChange',
 	[PAGINATION]: 'update',
-	[UPLOAD]: 'onPreview'
+	[UPLOAD]: 'onPreview',
+	[STEPS]: 'isCurrent',
+	[COUNT]: 'format',
+	[PROGRESS]: 'computed:text'
 };
 
 /** 断言条数下限：低于它说明加载器/枚举塌了，而不是「缺陷变少了」。 */
-const FLOOR = 30;
+const FLOOR = 45;
 
 console.log('\n[vui-uniapp] 纯函数型组件的行为测试（真的跑组件代码）');
 
@@ -442,6 +467,165 @@ test('upload · 单次可选数量取 min(剩余, count)：count 比剩余大时
   eq(calls.chooseImage[0].count, 2, 'count 比剩余大时应当听剩余的（否则一次就能选爆 max）');
 });
 
+// ── vui-steps：宿主传进来的 modelValue 必须先收敛成整数索引 ──
+//
+// 这一组是第 27 轮加的。宿主把索引绑成字符串是很常见的事（v-model 挂在 data 上、
+// index 从接口来），而旧实现里 `isCurrent(index)` 用的是 `===`：
+// `'1' === 1` 为假 → **一步都不高亮**，同时 `'1' > 0` 为真 → 第 0 步照样打勾，
+// 界面上看起来「当前步被跳过」。越界与负数同样没有当前态，且全都不报错。
+
+const stepsVm = (modelValue, items) =>
+	mount(STEPS, { items: items || [{ title: 'A' }, { title: 'B' }, { title: 'C' }], modelValue });
+
+test('steps · 每一步恰好处于「完成 / 当前 / 待办」三者之一（不许一步都不高亮）', () => {
+  const vm = stepsVm(1);
+  const states = [0, 1, 2].map((i) => (vm.isCurrent(i) ? 'current' : vm.isFinish(i) ? 'finish' : 'todo'));
+  eq(JSON.stringify(states), JSON.stringify(['finish', 'current', 'todo']), '正常索引的三种状态不对');
+  eq(states.filter((s) => s === 'current').length, 1, '当前态不是恰好一个');
+});
+
+test('steps · modelValue 传字符串（宿主常这么绑）也要能定位当前步', () => {
+  const vm = stepsVm('1');
+  eq(vm.currentIndex, 1, "字符串 '1' 没被当成第 2 步");
+  eq(vm.isCurrent(1), true, '当前步没有高亮 —— 旧实现里 `index === modelValue` 恒 false');
+  eq(vm.isFinish(0), true, '第一步应当已完成');
+  eq(vm.isFinish(1), false, '当前步不该被算成已完成');
+});
+
+test('steps · 越界收窄到「全部完成」，负数收窄到第一步', () => {
+  eq(stepsVm(99).currentIndex, 3, '越界的 modelValue 没有收窄（列表 3 步时上界是 3 = 全部完成）');
+  eq(stepsVm(3).currentIndex, 3, '「已走完」是合法状态，不该被收窄成 2');
+  const neg = stepsVm(-3);
+  eq(neg.currentIndex, 0, '负数没被收窄到第一步');
+  eq(neg.isCurrent(0), true, '负值时没有任何一步是当前态');
+});
+
+test('steps · 非数值（undefined / NaN / 字符串）都不许算出 NaN 索引', () => {
+  for (const mv of [undefined, null, NaN, 'abc']) {
+    const vm = stepsVm(mv);
+    ok(Number.isFinite(vm.currentIndex), `modelValue=${String(mv)} 算出了 ${vm.currentIndex}`);
+    eq(vm.currentIndex, 0, `modelValue=${String(mv)} 应退化成第一步`);
+  }
+});
+
+test('steps · 空列表时索引是 0 而不是 NaN', () => {
+  eq(stepsVm(0, []).currentIndex, 0, '空列表的 currentIndex 不是 0');
+});
+
+test('steps · items 传字符串数组时也能正常编号', () => {
+  const vm = stepsVm(1, ['甲', '乙', '丙']);
+  eq(vm.list.length, 3, '字符串数组没被规整成 {title}');
+  eq(vm.dotText(0), '✓', '已完成的圆点应当打勾');
+  eq(vm.dotText(1), '2', '当前步的圆点应当是序号');
+});
+
+test('steps · onClick 发的是原始下标（update:modelValue + change 两份）', () => {
+  const vm = stepsVm(0);
+  vm.onClick(2);
+  eq(vm.lastPayload('update:modelValue'), 2, 'update:modelValue 的载荷不对');
+  eq(vm.lastPayload('change'), 2, 'change 的载荷不对');
+  eq(vm.__events.length, 2, '事件条数不对（应当恰好两份）');
+});
+
+// ── vui-count-to：decimals 与 separator 的入参收敛 ──
+//
+// 第 27 轮加的。`format()` 是 `display` 计算属性唯一的依赖，它抛错 = 组件渲染崩。
+
+const countVm = (props) => mount(COUNT, props);
+/** `display` 读的是 `current`（动画当前值），格式化断言要把它显式钉住，否则量到的是 start。 */
+const countAt = (value, props) => {
+  const vm = countVm(props);
+  vm.current = value;
+  return vm.display;
+};
+
+test('count-to · decimals 超过 100 不许抛错（toFixed 对 >100 会抛 RangeError）', () => {
+  for (const d of [101, 1000, -5, 2.5, NaN, 'x', undefined]) {
+    let out;
+    try {
+      // 走 display 而不是直接调 format：抛错真正发生的地方就是这条计算属性链
+      out = countAt(1234.5678, { start: 0, end: 1.5, decimals: d });
+    } catch (e) {
+      throw new Error(`decimals=${String(d)} 让 display 抛错（${e.name}: ${e.message}）—— 组件会白屏`);
+    }
+    ok(typeof out === 'string' && out.length > 0, `decimals=${String(d)} 的输出不是字符串：${out}`);
+  }
+});
+
+test('count-to · decimals 的正常值不受收敛影响', () => {
+  eq(countAt(1234.5678, { decimals: 2 }), '1234.57', '两位小数算错');
+  eq(countAt(3.14159, { decimals: 3 }), '3.142', '三位小数算错');
+  eq(countAt(7.9, { decimals: 0 }), '8', '零位小数应当四舍五入');
+  eq(countAt(5, { decimals: -1 }), '5', '负数小数位应收成 0');
+  eq(countAt(5, { decimals: 2.5 }), '5.00', '小数位本身要先取整');
+});
+
+test('count-to · 千分位：普通分隔符与 $& 这类替换模式都必须是字面量', () => {
+  eq(countAt(1234567, { decimals: 0, separator: ',' }), '1,234,567', '逗号千分位不对');
+  eq(countAt(1234567, { decimals: 0, separator: ' ' }), '1 234 567', '空格千分位不对');
+  // 旧实现用字符串式 replace，`$&` 被当成「插入匹配到的文本」→ 分隔符全部消失（静默）
+  const dollar = countAt(1234567, { decimals: 0, separator: '$&' });
+  ok(dollar.indexOf('$&') >= 0, `separator="$&" 被当成替换模式了：实际输出 ${JSON.stringify(dollar)}`);
+  const dollar2 = countAt(1234567, { decimals: 0, separator: '$1' });
+  ok(dollar2.indexOf('$1') >= 0, `separator="$1" 被当成替换模式了：实际输出 ${JSON.stringify(dollar2)}`);
+});
+
+test('count-to · 负数的负号不参与分组，且分隔符照样生效', () => {
+  eq(countAt(-1234567, { decimals: 0, separator: ',' }), '-1,234,567', '负号被算进了分组');
+  eq(countAt(-0.5, { decimals: 1 }), '-0.5', '负小数算错');
+});
+
+test('count-to · 小数位与千分位同时开启时的拼接', () => {
+  eq(countAt(1234567.891, { decimals: 2, separator: ',' }), '1,234,567.89', '整数位分组 + 小数位不对');
+  eq(countAt(999.999, { decimals: 2, separator: ',' }), '1,000.00', '进位之后的分组不对');
+});
+
+test('count-to · prefix / suffix 与 display 的拼接顺序', () => {
+  eq(countAt(1234, { decimals: 0, separator: ',', prefix: '¥', suffix: ' USDT' }), '¥1,234 USDT', '前后缀没拼在正确的位置');
+});
+
+test('count-to · end 为 0 / 非数值时不抛错，且 duration=0 时直接落在终值', () => {
+  const vm = countVm({ start: 5, end: 0, duration: 0 });
+  eq(vm.current, 0, 'duration=0 没有直接跳到终值');
+  const bad = countVm({ start: 0, end: NaN, duration: 0 });
+  eq(bad.current, 0, 'end 非数值时没有兜底成 0');
+});
+
+// ── vui-progress：format 占位符必须全部替换 ──
+
+test('progress · format 里的多个 {value} 全部替换（不是只换第一个）', () => {
+  const vm = mount(PROGRESS, { percentage: 40, format: '{value}%（{value} 项）' });
+  eq(vm.text, '40%（40 项）', '有多余的 {value} 没被替换 —— 旧实现用的是非全局 replace');
+});
+
+test('progress · format 无占位符时原样输出，含 $ 时不被当成替换模式', () => {
+  eq(mount(PROGRESS, { percentage: 40, format: '加载中' }).text, '加载中', '无占位符的 format 被改写');
+  eq(mount(PROGRESS, { percentage: 40, format: '$& {value}' }).text, '$& 40', '$& 被当成替换模式了');
+});
+
+test('progress · 不传 format 时是「整数百分比」', () => {
+  eq(mount(PROGRESS, { percentage: 40 }).text, '40%', '默认文案不对');
+  eq(mount(PROGRESS, { percentage: 33.3 }).text, '33.3%', '小数百分比被抹掉了');
+});
+
+test('progress · percentage 越界收窄到 [0,100]，非数值退化成 0', () => {
+  eq(mount(PROGRESS, { percentage: 140 }).percent, 100, '上界没收窄');
+  eq(mount(PROGRESS, { percentage: -20 }).percent, 0, '下界没收窄');
+  eq(mount(PROGRESS, { percentage: 'abc' }).percent, 0, '非数值没退化成 0');
+  eq(mount(PROGRESS, { percentage: '60' }).percent, 60, "字符串 '60' 没被当成 60");
+});
+
+test('progress · barColor 的优先级：color prop > status > primary 兜底', () => {
+  eq(mount(PROGRESS, { color: '#123456', status: 'error' }).barColor, '#123456', 'color 优先级不对');
+  eq(mount(PROGRESS, { status: 'success' }).barColor, '#18bc37', 'status 没生效');
+  eq(mount(PROGRESS, { status: 'nonsense' }).barColor, '#2979ff', '未知 status 没有兜底成 primary');
+});
+
+test('progress · strokeWidth 数字按 rpx，字符串原样', () => {
+  eq(mount(PROGRESS, {}).barHeight, '12rpx', '数字型 strokeWidth 没被当成 rpx');
+  eq(mount(PROGRESS, { strokeWidth: '6px' }).barHeight, '6px', '带单位的 strokeWidth 被改写了');
+});
+
 // ── 收尾：条数下限 + 加载器自证 ──
 
 if (passed + failures.length < FLOOR) {
@@ -456,10 +640,19 @@ if (passed + failures.length < FLOOR) {
 // 「表里少了一条」只会让循环少跑一圈、静默通过（V6 注入实测红 0 条）。
 test('自证 · 每个登记组件的被测入口都真的加载出来了', () => {
   const names = Object.keys(SUBJECTS);
-  ok(names.length >= 4, `SUBJECTS 只有 ${names.length} 条 —— 登记表塌了`);
-  for (const [rel, method] of Object.entries(SUBJECTS)) {
+  ok(names.length >= 7, `SUBJECTS 只有 ${names.length} 条 —— 登记表塌了`);
+  for (const [rel, entry] of Object.entries(SUBJECTS)) {
     const vm = mount(rel, {});
-    ok(typeof vm[method] === 'function', `${rel} 上找不到 ${method}`);
+    // 入口两种形态：方法（函数）、计算属性（`computed:x` —— 给连一个 method 都没有的组件，
+    // 例如 vui-progress 只有 computed）。
+    const isComputed = entry.indexOf('computed:') === 0;
+    const key = isComputed ? entry.slice('computed:'.length) : entry;
+    if (isComputed) {
+      ok(key in vm, `${rel} 上找不到计算属性 ${key}`);
+      ok(vm[key] !== undefined, `${rel} 的计算属性 ${key} 求值是 undefined`);
+    } else {
+      ok(typeof vm[key] === 'function', `${rel} 上找不到方法 ${key}`);
+    }
   }
 });
 

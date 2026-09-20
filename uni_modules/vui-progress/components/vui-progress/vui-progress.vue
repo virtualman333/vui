@@ -91,7 +91,10 @@ export default {
 			return 'color:' + this.barColor + ';font-size:24rpx;';
 		},
 		text() {
-			if (this.format) return this.format.replace('{value}', this.percent);
+			/* 占位符要**全部**替换：`String.replace('{value}', …)` 只换第一个，
+			   于是 `format="{value}%（{value} 项）"` 会把第二个占位符原样吐给用户
+			   （实测输出「40%（{value} 项）」）。split/join 顺带避开 `$&` 这类替换模式。 */
+			if (this.format) return this.format.split('{value}').join(String(this.percent));
 			return this.percent + '%';
 		}
 	}

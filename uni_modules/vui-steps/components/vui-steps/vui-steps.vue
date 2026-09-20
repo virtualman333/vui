@@ -71,14 +71,30 @@ export default {
 		},
 		activeColor() {
 			return this.color || VUI_COLOR.primary;
+		},
+		/* 当前步：把宿主传进来的值收成 [0, list.length] 的整数。
+		   旧实现拿 `this.modelValue` 直接比，于是三种入参都**静默失效**（都不报错）：
+		   · 宿主绑字符串（'1' —— v-model 挂在 data 上、或 index 从接口来，很常见）
+		     `index === this.modelValue` 恒 false → **没有任何一步是当前态**；
+		     而 `index < this.modelValue` 靠隐式转换照旧成立 → 前面打勾、当前步被跳过。
+		   · 越界（99）→ 全部显示「完成」，看不出是配置写错了。
+		   · 负数（-3）→ 全部待办，同样没有当前态。
+		   `list.length` 是**合法**的「已走完」态（所有步骤都打勾），所以上界收到它为止。 */
+		currentIndex() {
+			const n = this.list.length;
+			const raw = Number(this.modelValue);
+			if (!isFinite(raw)) return 0;
+			const i = Math.floor(raw);
+			if (i < 0) return 0;
+			return i > n ? n : i;
 		}
 	},
 	methods: {
 		isFinish(index) {
-			return index < this.modelValue;
+			return index < this.currentIndex;
 		},
 		isCurrent(index) {
-			return index === this.modelValue;
+			return index === this.currentIndex;
 		},
 		dotText(index) {
 			return this.isFinish(index) ? '✓' : String(index + 1);
