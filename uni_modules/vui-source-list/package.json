@@ -1,7 +1,7 @@
 {
   "id": "vui-source-list",
   "displayName": "vui-source-list",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "VUI 引用来源列表组件",
   "keywords": [
     "vui-source-list"

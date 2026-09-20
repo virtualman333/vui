@@ -1,7 +1,7 @@
 {
   "id": "vui-time-picker",
   "displayName": "vui-time-picker",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "VUI 时间选择器组件",
   "keywords": [
     "vui-time-picker"
