@@ -60,13 +60,35 @@ export default {
 		display() {
 			const cursor = this.showCursor && !this.finished ? this.cursorChar : '';
 			return this.shown + cursor;
+		},
+		/* 「完整文本」的**唯一来源**。
+		
+		   旧实现把它在三个地方各取一次，而且口径不同：`watch.text` 收敛成
+		   `typeof val === 'string' ? val : ''`，而 `play()` 与 `finishNow()` 用的是
+		   `this.text || ''`（不收敛）。宿主把非字符串绑进 `:text`（`:text="item.count"`
+		   这类）时，两条路径对「完整文本」的理解不一致，后果是**一个字都不显示**、
+		   却立刻抛出 `finish`（参数是空串）—— 不报错，看起来像「这段文本是空的」。
+		   收敛规则只写在这里，三个读者拿到的是同一个值。
+		
+		   为什么是「转成字符串」而不是「不是字符串就当空」：text 的语义是
+		   「要输出的完整文本」，把宿主给的东西**静默丢掉**比画出来更坏。 */
+		targetText() {
+			const v = this.text;
+			if (v === null || v === undefined) return '';
+			return typeof v === 'string' ? v : String(v);
+		},
+		/* 每个字符的间隔毫秒数，同样要先收敛：`:speed="'40'"` 与 `:speed="0"` 都得有
+		   确定的行为，而不是把 NaN 交给 setInterval（NaN 会被当成 0 —— 一帧刷完整段）。 */
+		tickMs() {
+			const raw = Number(this.speed);
+			return Math.max(isFinite(raw) ? raw : 40, 8);
 		}
 	},
 	watch: {
 		text: {
 			immediate: true,
-			handler(val) {
-				const target = typeof val === 'string' ? val : '';
+			handler() {
+				const target = this.targetText;
 				/* 文本被整体替换（变短）时重置，避免残留旧内容 */
 				if (this.shown.length > target.length) {
 					this.shown = '';
@@ -93,7 +115,7 @@ export default {
 		/** 开始（或继续）输出 */
 		play() {
 			if (this.timer) return this;
-			const target = this.text || '';
+			const target = this.targetText;
 			if (this.shown.length >= target.length) {
 				/* 已追上当前文本：非流式场景直接收尾 */
 				if (!this.typing) {
@@ -107,7 +129,7 @@ export default {
 			}
 			this.finished = false;
 			this.timer = setInterval(() => {
-				const t = this.text || '';
+				const t = this.targetText;
 				if (this.shown.length < t.length) {
 					this.shown = t.slice(0, this.shown.length + 1);
 					this.$emit('change', this.shown);
@@ -117,7 +139,7 @@ export default {
 				if (this.typing) return;
 				this.finished = true;
 				this.$emit('finish', this.shown);
-			}, Math.max(this.speed, 8));
+			}, this.tickMs);
 			return this;
 		},
 		/** 暂停输出（保留已输出内容） */
@@ -137,7 +159,7 @@ export default {
 		/** 立即显示全部文本 */
 		finishNow() {
 			this.stopTimer();
-			this.shown = this.text || '';
+			this.shown = this.targetText;
 			if (!this.finished) {
 				this.finished = true;
 				this.$emit('change', this.shown);

@@ -13,7 +13,7 @@
 					:key="index"
 					:id="'vui-tab-' + index"
 					class="vui-tabs__item"
-					:class="{ 'is-active': index === modelValue, 'is-disabled': item.disabled }"
+					:class="{ 'is-active': index === currentIndex, 'is-disabled': item.disabled }"
 					:style="itemStyle(index)"
 					@click="onChange(index, item)"
 				>
@@ -75,31 +75,59 @@ export default {
 		activeColor() {
 			return this.color || VUI_COLOR.primary;
 		},
+		/* 当前标签索引：把宿主传进来的值收成 [0, list.length - 1] 的整数。
+		
+		   旧实现在**五个地方**各拿 `this.modelValue` 直接比（模板里的
+		   `index === modelValue`，以及 itemStyle / textStyle / onChange / lineStyle 四处），
+		   于是一份入参有四种静默失效：
+		     · 宿主绑字符串（'1' —— v-model 挂在 data 上，或者索引来自路由参数 / 接口，
+		       很常见）：`index === '1'` 恒 false → 下划线**停在正确的标签下面**，
+		       却没有任何标签高亮、卡片模式也不填充 —— 看起来像「当前项被跳过了」；
+		     · 越界（99）→ `translateX(9900%)`，下划线直接飞出容器；
+		     · 负数（-3）→ `translateX(-300%)`；
+		     · 小数（1.7）→ 下划线卡在两个标签之间，同样不高亮。
+		   四种都不报错、页面也不缺东西，所以只能靠人盯着才看得出来。
+		
+		   这与 vui-steps 第 27 轮修掉的是**同一个形状**；那次只修了一个组件，
+		   所以这一次除了这里，还把「谁在拿宿主入参当索引比」整条对账补进了
+		   check:logic（`宿主入参收敛` 一节），第三个组件不会再静默地长出来。
+		
+		   上界是 `list.length - 1` —— 标签没有「已走完」这种状态，
+		   与 steps 允许取到 `list.length` 的语义不同。 */
+		currentIndex() {
+			const n = this.list.length;
+			if (n <= 0) return 0;
+			const raw = Number(this.modelValue);
+			if (!isFinite(raw)) return 0;
+			const i = Math.floor(raw);
+			if (i < 0) return 0;
+			return i > n - 1 ? n - 1 : i;
+		},
 		scrollIntoView() {
-			return 'vui-tab-' + this.modelValue;
+			return 'vui-tab-' + this.currentIndex;
 		},
 		lineStyle() {
 			const count = this.list.length || 1;
 			const width = 100 / count;
-			return 'width:' + width + '%;transform:translateX(' + this.modelValue * 100 + '%);' +
+			return 'width:' + width + '%;transform:translateX(' + this.currentIndex * 100 + '%);' +
 				'background-color:' + this.activeColor + ';';
 		}
 	},
 	methods: {
 		itemStyle(index) {
 			let style = this.scrollable ? 'flex:0 0 auto;padding:0 24rpx;' : 'flex:1;';
-			if (this.type === 'card' && index === this.modelValue) {
+			if (this.type === 'card' && index === this.currentIndex) {
 				style += 'background-color:' + this.activeColor + ';border-color:' + this.activeColor + ';';
 			}
 			return style;
 		},
 		textStyle(index) {
-			if (index !== this.modelValue) return '';
+			if (index !== this.currentIndex) return '';
 			return this.type === 'card' ? 'color:' + VUI_COLOR.white + ';' : 'color:' + this.activeColor + ';';
 		},
 		onChange(index, item) {
 			if (item.disabled) return;
-			if (index === this.modelValue) return;
+			if (index === this.currentIndex) return;
 			this.$emit('update:modelValue', index);
 			this.$emit('change', index, item);
 		}

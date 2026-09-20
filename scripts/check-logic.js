@@ -71,6 +71,8 @@ const UPLOAD = 'uni_modules/vui-upload/components/vui-upload/vui-upload.vue';
 const STEPS = 'uni_modules/vui-steps/components/vui-steps/vui-steps.vue';
 const COUNT = 'uni_modules/vui-count-to/components/vui-count-to/vui-count-to.vue';
 const PROGRESS = 'uni_modules/vui-progress/components/vui-progress/vui-progress.vue';
+const TABS = 'uni_modules/vui-tabs/components/vui-tabs/vui-tabs.vue';
+const TYPING = 'uni_modules/vui-typing/components/vui-typing/vui-typing.vue';
 
 /**
  * 被测组件：`路径 → 入口`。**这里是唯一登记处** —— 加载器自证直接遍历它。
@@ -90,11 +92,16 @@ const SUBJECTS = {
 	[UPLOAD]: 'onPreview',
 	[STEPS]: 'isCurrent',
 	[COUNT]: 'format',
-	[PROGRESS]: 'computed:text'
+	[PROGRESS]: 'computed:text',
+	[TABS]: 'computed:currentIndex',
+	[TYPING]: 'computed:targetText'
 };
 
-/** 断言条数下限：低于它说明加载器/枚举塌了，而不是「缺陷变少了」。 */
-const FLOOR = 45;
+/**
+ * 断言条数下限：低于它说明加载器/枚举塌了，而不是「缺陷变少了」。
+ * 现网实测 67 条（登记 12 个组件）；留 7 条余量，只挡住「整片没跑」级别的塌陷。
+ */
+const FLOOR = 60;
 
 console.log('\n[vui-uniapp] 纯函数型组件的行为测试（真的跑组件代码）');
 
@@ -624,6 +631,187 @@ test('progress · barColor 的优先级：color prop > status > primary 兜底',
 test('progress · strokeWidth 数字按 rpx，字符串原样', () => {
   eq(mount(PROGRESS, {}).barHeight, '12rpx', '数字型 strokeWidth 没被当成 rpx');
   eq(mount(PROGRESS, { strokeWidth: '6px' }).barHeight, '6px', '带单位的 strokeWidth 被改写了');
+});
+
+// ── vui-tabs：宿主传进来的索引必须先收敛 ──
+//
+// vui-tabs 与 vui-steps 是**同一个形状**（第 27 轮修的是 steps）。旧实现在五个地方
+// 各拿 `this.modelValue` 直接比：模板里的 `index === modelValue`，以及
+// itemStyle / textStyle / onChange / lineStyle 四处。宿主绑字符串索引时
+// 下划线停在正确的标签下、却没有任何标签高亮 —— 不报错，也不缺东西。
+// 这次除修组件，还把这类比较变成一条对账（见文件末尾「宿主入参收敛」）。
+
+test('tabs · 宿主绑字符串索引时仍然有「当前标签」', () => {
+  const vm = mount(TABS, { items: ['一', '二', '三'], modelValue: '1' });
+  eq(vm.currentIndex, 1, "字符串 '1' 没被收敛成 1");
+  ok(vm.textStyle(1) !== '', '当前标签没有激活色 —— `index !== this.modelValue` 恒真');
+  eq(vm.textStyle(0), '', '非当前标签也拿到了激活色');
+  ok(vm.lineStyle.indexOf('translateX(100%)') >= 0, '下划线位置不对：' + vm.lineStyle);
+});
+
+test('tabs · 卡片模式的当前项要填充底色（同样走收敛后的索引）', () => {
+  const vm = mount(TABS, { items: ['一', '二', '三'], modelValue: '2', type: 'card' });
+  ok(vm.itemStyle(2).indexOf('background-color') >= 0, '卡片当前项没有被填充');
+  ok(vm.itemStyle(1).indexOf('background-color') < 0, '非当前项也被填充了');
+  eq(mount(TABS, { items: ['a'], modelValue: '0', type: 'line' }).itemStyle(0),
+    'flex:1;', 'line 模式不该给底色');
+});
+
+test('tabs · 越界 / 负数 / 小数 / 非数值都收成合法下标', () => {
+  eq(mount(TABS, { items: ['a', 'b', 'c'], modelValue: 99 }).currentIndex, 2, '上界没收');
+  eq(mount(TABS, { items: ['a', 'b', 'c'], modelValue: -3 }).currentIndex, 0, '下界没收');
+  eq(mount(TABS, { items: ['a', 'b', 'c'], modelValue: 1.7 }).currentIndex, 1, '小数没取整');
+  eq(mount(TABS, { items: ['a', 'b', 'c'], modelValue: 'abc' }).currentIndex, 0, '非数值没退化成 0');
+  eq(mount(TABS, { items: [], modelValue: 3 }).currentIndex, 0, '空列表时下标越界了');
+  const far = mount(TABS, { items: ['a', 'b', 'c'], modelValue: 99 });
+  ok(far.lineStyle.indexOf('translateX(200%)') >= 0, '越界时下划线飞出了容器：' + far.lineStyle);
+  ok(mount(TABS, { items: [], modelValue: 0 }).lineStyle.indexOf('width:100%') >= 0,
+    '空列表的下划线宽度没有兜底成 100%');
+  ok(mount(TABS, { items: ['a', 'b', 'c', 'd'] }).lineStyle.indexOf('width:25%') >= 0,
+    '4 个标签的下划线宽度不是 25%');
+});
+
+test('tabs · 点当前标签不再重复 emit，点别的标签才切', () => {
+  const vm = mount(TABS, { items: ['a', 'b', 'c'], modelValue: '1' });
+  vm.onChange(1, { title: 'b' });
+  eq(vm.pickEvent('update:modelValue').length, 0, "点当前标签又发了一次 update:modelValue（比较的是 '1' 与 1）");
+  vm.onChange(2, { title: 'c' });
+  eq(vm.lastPayload('update:modelValue'), 2, '点别的标签没切过去');
+  eq(vm.pickEvent('change').length, 1, 'change 事件的条数不对');
+});
+
+test('tabs · 禁用标签点了不切', () => {
+  const vm = mount(TABS, { items: [{ title: 'a' }, { title: 'b', disabled: true }], modelValue: 0 });
+  vm.onChange(1, { title: 'b', disabled: true });
+  eq(vm.pickEvent('change').length, 0, '禁用标签仍然发出了 change');
+});
+
+// ── vui-typing：「完整文本」只能有一个来源 ──
+//
+// 旧实现把它在三个地方各取一次、口径不同：`watch.text` 收敛成
+// `typeof val === 'string' ? val : ''`，而 `play()` / `finishNow()` 用 `this.text || ''`。
+// 宿主把非字符串绑进 `:text` 时两条路径理解不同 —— 一个字都不显示，却立刻抛 finish（空串）。
+
+test('typing · 非字符串的 text 不再被静默丢掉', () => {
+  eq(mount(TYPING, { text: 12345 }).targetText, '12345', '数字型 text 没被转成字符串');
+  eq(mount(TYPING, { text: null }).targetText, '', 'null 应退化成空串');
+  eq(mount(TYPING, { text: undefined }).targetText, '', 'undefined 应退化成空串');
+  eq(mount(TYPING, { text: '' }).targetText, '', '空串仍是空串');
+  eq(mount(TYPING, { text: '今年是 2026 年' }).targetText, '今年是 2026 年', '字符串被改写了');
+});
+
+test('typing · watch.text 认的是收敛后的完整文本，不是它自己的入参', () => {
+  const vm = mount(TYPING, { text: 12345, shown: 'a', autoplay: false });
+  loadOptions(TYPING).watch.text.handler.call(vm);
+  eq(vm.shown, 'a', '把「文本变长了」误判成「变短了」，已输出的内容被清掉（旧实现 target 恒为空串）');
+  const vm2 = mount(TYPING, { text: 'abcdefgh', shown: 'abcdefghijkl', autoplay: false });
+  loadOptions(TYPING).watch.text.handler.call(vm2);
+  eq(vm2.shown, '', '文本真的变短了却没有重置');
+});
+
+test('typing · text 传数字时 play() 不会以为「已经追上」而空转', () => {
+  const vm = mount(TYPING, { text: 12345, shown: '12345', autoplay: false });
+  vm.play();
+  eq(vm.timer, null, 'play() 起了定时器却没内容可输出（旧实现拿 undefined 比 length，判据恒假）');
+  eq(vm.lastPayload('finish'), '12345', 'finish 事件的参数不是完整文本');
+});
+
+// 只测 finishNow 这一条路径；play() 那条路径由上面「text 传数字时 play() 不会
+// 以为已经追上」负责。名字按实际覆盖面写，别让标题替断言吹牛。
+test('typing · finishNow 读的也是收敛后的完整文本', () => {
+  const vm = mount(TYPING, { text: 12345, autoplay: false });
+  vm.finishNow();
+  eq(vm.shown, '12345', 'finishNow 用的还是未收敛的 this.text');
+  eq(vm.lastPayload('finish'), '12345', 'finish 的载荷不对');
+});
+
+test('typing · speed 收敛成确定的间隔（NaN 不再交给 setInterval）', () => {
+  eq(mount(TYPING, { speed: 'fast' }).tickMs, 40, '非数值 speed 没有兜底');
+  eq(mount(TYPING, { speed: '60' }).tickMs, 60, "字符串 '60' 没被当成 60");
+  eq(mount(TYPING, { speed: 0 }).tickMs, 8, '0 没有收到下限 8');
+  eq(mount(TYPING, { speed: 5 }).tickMs, 8, '小于 8 的间隔没有收到下限');
+  eq(mount(TYPING, { speed: 40 }).tickMs, 40, '正常值被改坏了');
+});
+
+// ── 宿主入参收敛：拿循环下标与宿主入参直接比的组件，必须先收敛 ──
+//
+// 这条规则的样本是 vui-steps（第 27 轮）与 vui-tabs（第 28 轮）：两者都拿
+// `index === this.modelValue` 直接比，宿主绑字符串时**没有任何一项是当前态**。
+// 第 27 轮只修了 steps 一个组件，第二次照样长出来 —— 所以这次把它变成一条对账。
+//
+// **判据的边界（如实写下来）**：只认「循环变量叫 `index`」并且「比的是
+// `this.<组件自己的 prop>`」这两种形态。用到别的变量名（`i` / `page`）、或者比的
+// 是计算属性而不是 prop 的地方**这条看不到** —— 它盯的是已经出现过两次的那个形状，
+// 不是「所有入参都收敛了」。
+const INDEX_COMPARE_RE = /(?:^|[^\w.])index\s*(?:===|!==|<=|>=|<|>)\s*this\.[A-Za-z_$][\w$]*|this\.[A-Za-z_$][\w$]*\s*(?:===|!==|<=|>=|<|>)\s*index(?![\w$])/;
+const COERCION_RE = /Number\(\s*this\.|parseInt\(\s*this\./;
+
+/** 把每个组件的 `<script>` 剥掉注释后取出来（读源码做判断前一律先剥） */
+function componentScripts() {
+  const dir = path.join(root, 'uni_modules');
+  const out = [];
+  for (const name of fs.readdirSync(dir)) {
+    const file = path.join(dir, name, 'components', name, `${name}.vue`);
+    if (!fs.existsSync(file)) continue;
+    const { descriptor, errors } = parse(fs.readFileSync(file, 'utf8'));
+    if (errors && errors.length) throw new Error(`${name} SFC 解析失败：${errors[0].message}`);
+    if (!descriptor.script) continue;
+    const code = descriptor.script.content
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .filter((l) => !l.trim().startsWith('//'))
+      .join('\n');
+    out.push({ rel: name, code });
+  }
+  return out;
+}
+
+/** 扫描出来的「拿 index 与宿主入参直接比」的组件（宽扫） */
+function indexComparers() {
+  return componentScripts().filter((s) => INDEX_COMPARE_RE.test(s.code));
+}
+
+test('对账 · 拿 index 与宿主入参直接比的组件，脚本里必须能看到入参收敛', () => {
+  const all = componentScripts();
+  ok(all.length >= 40, `只扫到 ${all.length} 个组件的脚本 —— 扫描面塌了，下面的对账会变成空话`);
+  const hits = all.filter((s) => INDEX_COMPARE_RE.test(s.code));
+  ok(hits.length >= 2, `只扫到 ${hits.length} 个组件 —— vui-steps 与 vui-tabs 至少两个，判据没在看真东西`);
+  const names = hits.map((h) => h.rel);
+  ok(names.some((n) => n.indexOf('vui-steps') >= 0), 'vui-steps 不在扫描结果里（已知它就是这么写的）');
+  const without = hits.filter((h) => !COERCION_RE.test(h.code)).map((h) => h.rel);
+  eq(JSON.stringify(without), '[]',
+    `这些组件拿 index 与宿主入参直接比，却全文件没有一处数值收敛：${without.join('、')}`
+    + ' —— 宿主绑字符串索引时不会有任何一项是当前态');
+});
+
+test('对账 · 判据自证：合成的「没收敛」源码必须被判出来，收敛写法必须放行', () => {
+  const bad = 'isCurrent(index) { return index === this.modelValue; }';
+  ok(INDEX_COMPARE_RE.test(bad), '合成样本没被认成「直接比」—— 宽扫恒假');
+  eq(COERCION_RE.test(bad), false, '合成样本被判成「已收敛」—— 判据恒真');
+  const good = 'const i = Number(this.modelValue); return index === i;';
+  eq(COERCION_RE.test(good), true, '收敛写法没被认出来');
+  eq(INDEX_COMPARE_RE.test(good), false,
+    '收敛后的写法仍被认成「直接比」—— 判据过宽，宽扫会把已经修好的组件也算进「没收敛」名单');
+});
+
+test('对账 · 模板里也不许拿 index 直接与 prop 比（vui-tabs 的第五处就在这里）', () => {
+  // 一个组件的 prop 名单从组件自己**现算**，不手抄
+  const propsOf = (rel) => Object.keys(loadOptions(rel).props || {});
+  const templateIndexCompares = (rel, template) => {
+    const props = propsOf(rel);
+    return props.filter((name) =>
+      new RegExp(`(?:^|[^\\w.])index\\s*(?:===|!==|<=|>=|<|>)\\s*${name}(?![\\w$])`).test(template)
+    );
+  };
+  const tabs = fs.readFileSync(path.join(root, TABS), 'utf8');
+  const tmpl = tabs.slice(0, tabs.indexOf('</template>'));
+  eq(JSON.stringify(templateIndexCompares(TABS, tmpl)), '[]',
+    'vui-tabs 的模板里又出现了 `index === modelValue` —— 它绕过了脚本侧的收敛（旧的 is-active 就是这一处）');
+  ok(tmpl.indexOf('index === currentIndex') >= 0, '模板里的 is-active 没有走 currentIndex');
+  // 判据自证：把模板那段换回旧写法，必须报出来
+  const old = tmpl.replace("index === currentIndex", "index === modelValue");
+  eq(JSON.stringify(templateIndexCompares(TABS, old)), JSON.stringify(['modelValue']),
+    '判据抓不到旧写法 —— 这条对账是空话');
 });
 
 // ── 收尾：条数下限 + 加载器自证 ──
